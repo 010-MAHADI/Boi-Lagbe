@@ -1,13 +1,22 @@
 """
 Boi Lagbe (বই লাগবে) — FastAPI backend entry point.
 """
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from .config import get_settings
 from .routers import auth, institutes, listings, upload, chat, wanted, reviews, reports, favorites, admin
 
 settings = get_settings()
+
+ALLOWED_ORIGINS = [
+    settings.FRONTEND_URL,
+    "http://localhost:3000",
+    "https://boilagbe.vercel.app",
+    "https://boi-lagbe.vercel.app",
+    "https://boilagbe.site",
+]
 
 app = FastAPI(
     title="বই লাগবে API",
@@ -23,18 +32,36 @@ app = FastAPI(
 # ---------------------------------------------------------------------------
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        settings.FRONTEND_URL,
-        "http://localhost:3000",
-        "https://boilagbe.vercel.app",
-        "https://boi-lagbe.vercel.app",
-        "https://boilagbe.site",
-    ],
+    allow_origins=ALLOWED_ORIGINS,
     allow_origin_regex=r"https://boilagbe.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ---------------------------------------------------------------------------
+# Global error handler — ensures CORS headers are present even on 500s
+# Without this, FastAPI's default error responses omit CORS headers and the
+# browser reports a CORS error instead of the real server error.
+# ---------------------------------------------------------------------------
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    origin = request.headers.get("origin", "")
+    import re
+    allowed = (
+        origin in ALLOWED_ORIGINS
+        or bool(re.match(r"https://boilagbe.*\.vercel\.app", origin))
+    )
+    headers = {}
+    if allowed:
+        headers["Access-Control-Allow-Origin"] = origin
+        headers["Access-Control-Allow-Credentials"] = "true"
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"},
+        headers=headers,
+    )
 
 # ---------------------------------------------------------------------------
 # Routers
