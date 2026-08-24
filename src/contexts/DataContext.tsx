@@ -131,6 +131,7 @@ interface DataContextType {
   // Listings
   getListing: (id: string) => Listing | undefined;
   createListing: (input: CreateListingInput) => Promise<Listing>;
+  updateListing: (id: string, patch: Partial<Listing>) => Promise<void>;
   markListingSold: (id: string) => void;
   deleteListing: (id: string) => void;
   registerView: (id: string) => void;
@@ -364,6 +365,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
     setListings((prev) => [listingWithImages, ...prev]);
     return listingWithImages;
+  }, [token]);
+
+  const updateListing = useCallback(async (id: string, patch: Partial<Listing>): Promise<void> => {
+    if (!token) throw new Error('লগইন করুন');
+    const updated = await listingsApi.update(token, id, patch);
+    setListings((prev) => prev.map((l) => (l.id === id ? { ...l, ...(updated as unknown as Listing) } : l)));
   }, [token]);
 
   const markListingSold = useCallback((id: string) => {
@@ -780,6 +787,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
       getListing,
       createListing,
+      updateListing,
       markListingSold,
       deleteListing,
       registerView,
@@ -828,7 +836,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       isLoaded, users, listings, institutes, conversations, messages, offers,
       wanted, wantedOffers, reviews, reports, favorites,
       toggleBlockUser, toggleVerifyUser,
-      getListing, createListing, markListingSold, deleteListing, registerView,
+      getListing, createListing, updateListing, markListingSold, deleteListing, registerView,
       getInstitute, createInstitute, updateInstitute, approveInstitute, rejectInstitute,
       isFavorite, toggleFavorite, favoriteListingsFor,
       offersForListing, submitOffer,

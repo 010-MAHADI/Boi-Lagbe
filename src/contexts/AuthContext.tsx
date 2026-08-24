@@ -8,7 +8,7 @@ interface AuthContextType extends AuthState {
   login: (payload: LoginPayload) => Promise<boolean>;
   signup: (payload: SignupPayload) => Promise<boolean>;
   logout: () => void;
-  updateProfile: (updates: Partial<User>) => void;
+  updateProfile: (updates: Partial<User>) => Promise<void>;
   token: string | null;
 }
 
@@ -80,13 +80,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem(STORAGE_KEY);
   }, []);
 
-  const updateProfile = useCallback((updates: Partial<User>) => {
+  const updateProfile = useCallback(async (updates: Partial<User>) => {
     setState((prev) => {
       if (!prev.user) return prev;
       const updatedUser = { ...prev.user, ...updates };
       if (prev.token) persistAuth(updatedUser, prev.token);
       return { ...prev, user: updatedUser };
     });
+    // Persist to backend (best-effort — local state is already updated)
+    const currentToken = getStoredAuth().token;
+    if (currentToken) {
+      try {
+        const fresh = await authApi.updateMe(currentToken, {
+          name: updates.name,
+          phone: updates.phone,
+          avatar_url: updates.avatar_url,
+          institute_id: updates.institute_id,
+        });
+        setState((prev) => {
+          const updatedUser = { ...prev.user!, ...fresh };
+          if (prev.token) persistAuth(updatedUser, prev.token);
+          return { ...prev, user: updatedUser };
+        });
+      } catch {
+        // Ignore — local update already applied
+      }
+    }
   }, [persistAuth]);
 
   return (

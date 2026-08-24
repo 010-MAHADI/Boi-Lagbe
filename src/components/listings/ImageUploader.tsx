@@ -3,25 +3,24 @@
 import { useRef, useState } from 'react';
 import { ImagePlus, Loader2, X } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { useAuth } from '@/contexts/AuthContext';
-import { uploadApi } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 interface ImageUploaderProps {
-  images: string[];          // public URLs for display
-  onChange: (images: string[], files?: File[]) => void;
+  images: string[];          // local data: URLs for preview only — never pre-uploaded
+  onChange: (images: string[], files: File[]) => void;
   max?: number;
   error?: string;
 }
 
 const MAX_EDGE = 1200;
-const JPEG_QUALITY = 0.75;
+const JPEG_QUALITY = 0.78;
 
 /**
- * Compress a File to a JPEG data: URL (for local preview), and keep the
- * original File for the R2 upload.
+ * Compress a File to a JPEG data: URL for local preview.
+ * Nothing is sent to any server here — the actual R2 upload
+ * happens at form-submit time inside DataContext.createListing.
  */
-async function compressForPreview(file: File): Promise<string> {
+async function compressToPreview(file: File): Promise<string> {
   const dataUrl = await new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result as string);
@@ -48,10 +47,9 @@ async function compressForPreview(file: File): Promise<string> {
 
 export default function ImageUploader({ images, onChange, max = 6, error }: ImageUploaderProps) {
   const { t } = useLanguage();
-  const { token } = useAuth();
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
-  // Keep original File objects in parallel with preview URLs
+  // Parallel array of File objects — same index as images[]
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
 
   const room = max - images.length;
@@ -66,21 +64,11 @@ export default function ImageUploader({ images, onChange, max = 6, error }: Imag
 
       for (const file of picked) {
         try {
-          let previewUrl: string;
-
-          if (token) {
-            // Upload directly to R2 and use the public URL as preview
-            const { public_url } = await uploadApi.uploadFile(token, file);
-            previewUrl = public_url;
-          } else {
-            // Fallback: local data: URL (works without auth, stored inline)
-            previewUrl = await compressForPreview(file);
-          }
-
-          previews.push(previewUrl);
+          const preview = await compressToPreview(file);
+          previews.push(preview);
           newFiles.push(file);
         } catch (e) {
-          console.warn('Image upload failed for file', file.name, e);
+          console.warn('Preview failed for', file.name, e);
         }
       }
 
@@ -107,7 +95,7 @@ export default function ImageUploader({ images, onChange, max = 6, error }: Imag
       <div className="grid grid-cols-3 gap-2.5">
         {images.map((src, index) => (
           <div
-            key={`${index}-${src.slice(-16)}`}
+            key={index}
             className="relative aspect-square rounded-[var(--radius-card)] overflow-hidden border border-border-warm bg-warm-surface"
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -141,7 +129,7 @@ export default function ImageUploader({ images, onChange, max = 6, error }: Imag
           >
             {busy ? <Loader2 size={22} className="animate-spin" /> : <ImagePlus size={22} />}
             <span className="text-[11px] font-medium px-1 text-center leading-tight">
-              {busy ? 'আপলোড হচ্ছে...' : t('listing.create.step3.photoAdd')}
+              {busy ? 'প্রিভিউ তৈরি হচ্ছে...' : t('listing.create.step3.photoAdd')}
             </span>
           </button>
         )}

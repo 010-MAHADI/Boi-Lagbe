@@ -278,8 +278,6 @@
   "common.anonymous": "A buyer",
 
   "auth.loginRequired": "Please log in to do that",
-  "auth.demoHint": "Demo account: rahim@example.com — any password works",
-  "auth.adminHint": "For the admin view: admin@boilagbe.com",
   "auth.login.success": "Welcome back!",
   "auth.signup.success": "Account created — start browsing!",
   "auth.logout.success": "You have been logged out",

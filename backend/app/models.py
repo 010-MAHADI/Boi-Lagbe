@@ -1,6 +1,7 @@
 """
 SQLAlchemy ORM models — mirrors the schema from the build plan §7.
 """
+import re
 import uuid
 from datetime import datetime
 from typing import Optional, List
@@ -22,6 +23,32 @@ def _now():
 
 def _uuid():
     return str(uuid.uuid4())
+
+
+def _slugify(text: str, uid_suffix: str) -> str:
+    """
+    Convert a listing title to a URL-safe slug, appending a short unique suffix
+    derived from the listing UUID so slugs are always unique.
+
+    Example: "১ম সেমিস্টার সব বই"  + "7d563fcf" → "1m-semester-sab-boi-7d563f"
+    But since Bangla doesn't transliterate cleanly without a library we strip
+    non-ASCII after lowercasing, collapse separators, and append the 6-char id suffix.
+    """
+    slug = text.lower()
+    # Replace common Bangla numerals
+    bn_digits = str.maketrans("০১২৩৪৫৬৭৮৯", "0123456789")
+    slug = slug.translate(bn_digits)
+    # Keep ASCII alphanumeric + spaces/hyphens, remove the rest
+    slug = re.sub(r"[^a-z0-9\s\-]", " ", slug)
+    # Collapse whitespace/hyphens to a single hyphen
+    slug = re.sub(r"[\s\-]+", "-", slug).strip("-")
+    # Truncate to 60 chars so URLs don't get too long
+    slug = slug[:60].rstrip("-")
+    # If slug is empty after stripping (all Bangla), use "book"
+    if not slug:
+        slug = "book"
+    short = uid_suffix[:6]
+    return f"{slug}-{short}"
 
 
 # ---------------------------------------------------------------------------
@@ -92,6 +119,7 @@ class Listing(Base):
     seller_id: Mapped[str] = mapped_column(
         String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
+    slug: Mapped[Optional[str]] = mapped_column(String(200), nullable=True, unique=True, index=True)
     category_slug: Mapped[str] = mapped_column(
         Enum("academic_book", "general_book", "notes_suggestion", name="category_slug"),
         nullable=False,

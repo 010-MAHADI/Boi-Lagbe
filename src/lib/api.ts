@@ -152,6 +152,13 @@ export const listingsApi = {
     return request<Listing>('GET', `/api/listings/${id}?${qs}`);
   },
 
+  getBySlug: (slug: string, lat?: number, lng?: number) => {
+    const qs = new URLSearchParams();
+    if (lat) qs.set('lat', String(lat));
+    if (lng) qs.set('lng', String(lng));
+    return request<Listing>('GET', `/api/listings/slug/${slug}?${qs}`);
+  },
+
   create: (token: string, data: CreateListingPayload) =>
     request<Listing>('POST', '/api/listings', data, token),
 

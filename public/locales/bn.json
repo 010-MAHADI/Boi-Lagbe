@@ -278,8 +278,6 @@
   "common.anonymous": "একজন ক্রেতা",
 
   "auth.loginRequired": "এই কাজটি করতে লগইন করতে হবে",
-  "auth.demoHint": "ডেমো অ্যাকাউন্ট: rahim@example.com — পাসওয়ার্ড যা খুশি দিন",
-  "auth.adminHint": "অ্যাডমিন দেখতে: admin@boilagbe.com",
   "auth.login.success": "স্বাগতম, আবার দেখা হলো!",
   "auth.signup.success": "অ্যাকাউন্ট তৈরি হয়েছে — এখনই বই খুঁজুন!",
   "auth.logout.success": "লগআউট হয়ে গেছে",

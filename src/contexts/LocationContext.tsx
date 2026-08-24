@@ -27,6 +27,7 @@ const DISTRICT_CENTROIDS = [
   { division: 'chattogram', district: 'কুমিল্লা', lat: 23.4607, lng: 91.1809 },
   { division: 'rajshahi', district: 'রাজশাহী', lat: 24.3745, lng: 88.6042 },
   { division: 'rajshahi', district: 'বগুড়া', lat: 24.8465, lng: 89.3730 },
+  { division: 'rajshahi', district: 'সিরাজগঞ্জ', lat: 24.4539, lng: 89.6575 },
   { division: 'khulna', district: 'খুলনা', lat: 22.8456, lng: 89.5403 },
   { division: 'khulna', district: 'যশোর', lat: 23.1634, lng: 89.2132 },
   { division: 'sylhet', district: 'সিলেট', lat: 24.8949, lng: 91.8687 },

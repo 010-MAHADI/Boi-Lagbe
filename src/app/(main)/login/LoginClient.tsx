@@ -3,7 +3,6 @@
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
-import { Info } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
@@ -17,7 +16,6 @@ export default function LoginClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  // Everything that gates on auth sends the user here with `?next=`.
   const next = searchParams.get('next') || '/';
 
   const [email, setEmail] = useState('');
@@ -29,14 +27,19 @@ export default function LoginClient() {
     e.preventDefault();
     setBusy(true);
     setError(undefined);
-    const ok = await login({ email: email.trim(), password });
-    setBusy(false);
-    if (!ok) {
+    try {
+      const ok = await login({ email: email.trim(), password });
+      if (!ok) {
+        setError(t('auth.login.error'));
+        return;
+      }
+      showToast(t('auth.login.success'));
+      router.push(next);
+    } catch {
       setError(t('auth.login.error'));
-      return;
+    } finally {
+      setBusy(false);
     }
-    showToast(t('auth.login.success'));
-    router.push(next);
   };
 
   return (
@@ -74,15 +77,6 @@ export default function LoginClient() {
         <Button type="submit" fullWidth isLoading={busy}>
           {t('auth.login.submit')}
         </Button>
-
-        {/* This build runs on mock data, so say out loud which accounts exist. */}
-        <div className="rounded-[var(--radius-button)] bg-info-light/60 p-3 space-y-1">
-          <p className="flex items-start gap-1.5 text-xs text-info">
-            <Info size={14} className="shrink-0 mt-0.5" />
-            {t('auth.demoHint')}
-          </p>
-          <p className="text-xs text-info pl-5">{t('auth.adminHint')}</p>
-        </div>
 
         <p className="text-center text-sm text-text-secondary pt-1">
           {t('auth.login.noAccount')}{' '}

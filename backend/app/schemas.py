@@ -105,6 +105,7 @@ class ListingImageOut(BaseModel):
 # ---------------------------------------------------------------------------
 class ListingOut(BaseModel):
     id: str
+    slug: Optional[str] = None
     seller_id: str
     seller: Optional[UserOut] = None
     category_slug: str
@@ -159,10 +160,13 @@ class ListingUpdateRequest(BaseModel):
     description_bn: Optional[str] = None
     description_en: Optional[str] = None
     condition: Optional[str] = None
+    level_label: Optional[str] = None
     price: Optional[int] = None
     negotiable: Optional[bool] = None
     quantity: Optional[int] = None
     status: Optional[str] = None
+    contact_preference: Optional[List[str]] = None
+    whatsapp_number: Optional[str] = None
 
 
 class ListingSearchParams(BaseModel):

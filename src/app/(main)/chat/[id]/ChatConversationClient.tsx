@@ -138,7 +138,7 @@ export default function ChatConversationClient({ conversationId }: ChatConversat
         <div className="flex items-center gap-2">
           {listing && (
             <Link
-              href={`/listings/${listing.id}`}
+              href={listing.slug ? `/product/${listing.slug}` : `/listings/${listing.id}`}
               className="p-2 rounded-xl bg-warm-surface border border-border-warm text-text-muted hover:text-primary transition-colors text-xs font-medium flex items-center gap-1"
               title="বইয়ের পাতা দেখুন"
             >

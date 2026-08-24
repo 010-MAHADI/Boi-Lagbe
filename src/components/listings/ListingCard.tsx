@@ -31,7 +31,7 @@ export default function ListingCard({ listing }: ListingCardProps) {
     e.preventDefault();
     e.stopPropagation();
     if (!user) {
-      router.push(`/login?next=/listings/${listing.id}`);
+      router.push(listing.slug ? `/login?next=/product/${listing.slug}` : `/login?next=/listings/${listing.id}`);
       return;
     }
     const nowFavorite = toggleFavorite(user.id, listing.id);
@@ -46,7 +46,7 @@ export default function ListingCard({ listing }: ListingCardProps) {
   const description = listing.description_bn || listing.description_en || '';
 
   return (
-    <Link href={`/listings/${listing.id}`} className="block group">
+    <Link href={listing.slug ? `/product/${listing.slug}` : `/listings/${listing.id}`} className="block group">
       <div className="bg-white rounded-[var(--radius-card)] border border-border-warm shadow-[var(--shadow-card)] overflow-hidden card-hover">
         {/* Image */}
         <div className="relative aspect-[4/3] bg-warm-surface overflow-hidden">

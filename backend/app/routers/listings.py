@@ -10,7 +10,7 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db
-from ..models import Listing, ListingImage, User, Institute
+from ..models import Listing, ListingImage, User, Institute, _slugify
 from ..schemas import (
     ListingOut, ListingImageOut, ListingCreateRequest, ListingUpdateRequest,
     PaginatedResponse,
@@ -40,6 +40,7 @@ def _listing_out(listing: Listing, distance_m: Optional[float] = None) -> Listin
 
     out = ListingOut(
         id=listing.id,
+        slug=listing.slug,
         seller_id=listing.seller_id,
         seller=listing.seller,
         category_slug=listing.category_slug,
@@ -185,6 +186,43 @@ async def search_listings(
 
 
 # ---------------------------------------------------------------------------
+# GET /listings/slug/:slug  — lookup by human-readable slug
+# ---------------------------------------------------------------------------
+@router.get("/slug/{slug}", response_model=ListingOut)
+async def get_listing_by_slug(
+    slug: str,
+    db: AsyncSession = Depends(get_db),
+    lat: Optional[float] = Query(None),
+    lng: Optional[float] = Query(None),
+    current_user: Optional[User] = Depends(get_optional_user),
+):
+    result = await db.execute(
+        select(Listing)
+        .options(
+            selectinload(Listing.seller),
+            selectinload(Listing.institute),
+            selectinload(Listing.images),
+        )
+        .where(Listing.slug == slug)
+    )
+    listing = result.scalar_one_or_none()
+    if not listing:
+        raise HTTPException(status_code=404, detail="বিজ্ঞাপনটি পাওয়া যায়নি")
+
+    await db.execute(
+        update(Listing).where(Listing.id == listing.id).values(view_count=Listing.view_count + 1)
+    )
+
+    distance_m = None
+    if lat is not None and lng is not None:
+        dlat = (listing.lat - lat) * 111.0
+        dlng = (listing.lng - lng) * 111.0 * math.cos(math.radians(lat))
+        distance_m = math.sqrt(dlat**2 + dlng**2) * 1000
+
+    return _listing_out(listing, distance_m)
+
+
+# ---------------------------------------------------------------------------
 # GET /listings/:id
 # ---------------------------------------------------------------------------
 @router.get("/{listing_id}", response_model=ListingOut)
@@ -252,7 +290,11 @@ async def create_listing(
         view_count=0,
     )
     db.add(listing)
-    await db.flush()  # get listing.id
+    await db.flush()  # get listing.id — needed before we can build the slug
+
+    # Generate a URL slug from the title + short listing ID
+    listing.slug = _slugify(payload.title, listing.id)
+    db.add(listing)
 
     for i, key in enumerate(payload.image_keys):
         db.add(ListingImage(listing_id=listing.id, r2_key=key, sort_order=i))
@@ -310,12 +352,23 @@ async def delete_listing(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(select(Listing).where(Listing.id == listing_id))
+    from ..r2 import delete_object as r2_delete
+
+    result = await db.execute(
+        select(Listing)
+        .options(selectinload(Listing.images))
+        .where(Listing.id == listing_id)
+    )
     listing = result.scalar_one_or_none()
     if not listing:
         raise HTTPException(status_code=404, detail="বিজ্ঞাপনটি পাওয়া যায়নি")
     if listing.seller_id != current_user.id and current_user.role != "admin":
         raise HTTPException(status_code=403, detail="এই বিজ্ঞাপন মুছে দেওয়ার অনুমতি নেই")
+
+    # Delete R2 objects before removing DB rows so we never lose track of keys
+    for img in listing.images:
+        r2_delete(img.r2_key)
+
     await db.delete(listing)
 
 

@@ -53,6 +53,7 @@ export type ContactPreference = 'chat' | 'phone' | 'whatsapp';
 
 export interface Listing {
   id: string;
+  slug?: string;
   seller_id: string;
   category_id: string;
   category_slug: CategorySlug;

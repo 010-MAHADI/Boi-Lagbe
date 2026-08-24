@@ -67,10 +67,33 @@ async def migrate():
                 )
             )""",
         ),
+        (
+            "listings_slug_idx",
+            "CREATE UNIQUE INDEX IF NOT EXISTS listings_slug_idx ON listings (slug) WHERE slug IS NOT NULL",
+        ),
     ]
 
     for label, sql in indexes:
         await _exec_ddl(engine, sql, f"Index {label}")
+
+    # Add slug column to existing databases (idempotent)
+    await _exec_ddl(
+        engine,
+        "ALTER TABLE listings ADD COLUMN IF NOT EXISTS slug VARCHAR(200)",
+        "Column listings.slug",
+    )
+
+    # Back-fill slugs for any existing rows that don't have one yet.
+    # Python-side generation is simpler than a pure-SQL version here.
+    backfill_sql = """
+        UPDATE listings
+        SET slug = regexp_replace(
+                       lower(translate(title, '০১২৩৪৫৬৭৮৯', '0123456789')),
+                       '[^a-z0-9]+', '-', 'g'
+                   ) || '-' || substring(id, 1, 6)
+        WHERE slug IS NULL
+    """
+    await _exec_ddl(engine, backfill_sql, "Back-fill slugs")
 
     await engine.dispose()
     print("\n🎉 Migration complete!")
