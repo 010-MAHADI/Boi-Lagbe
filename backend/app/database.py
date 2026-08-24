@@ -11,6 +11,8 @@ def _build_engine_url(raw: str) -> tuple[str, dict]:
     """
     asyncpg does not accept ?sslmode= as a query parameter.
     Strip it from the URL and return ssl connect_args instead.
+    Also strips channel_binding which older asyncpg versions don't support
+    (Vercel bundles a vendored asyncpg that predates that parameter).
     """
     # Normalise scheme
     if raw.startswith("postgres://"):
