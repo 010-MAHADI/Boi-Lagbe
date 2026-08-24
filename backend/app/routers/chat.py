@@ -5,15 +5,15 @@ from typing import List, Optional
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select, update, func
+from sqlalchemy import select, update
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db
-from ..models import Conversation, Message, Listing, User, PriceOffer
+from ..models import Conversation, Message, Listing, ListingImage, User, PriceOffer
 from ..schemas import (
     ConversationOut, MessageOut, MessageSendRequest,
-    PriceOfferOut, PriceOfferCreate,
+    PriceOfferOut, PriceOfferCreate, UserOut,
 )
 from ..auth import get_current_user
 from ..r2 import build_public_url
@@ -21,27 +21,58 @@ from ..r2 import build_public_url
 router = APIRouter(prefix="/chat", tags=["chat"])
 
 
-def _conv_out(conv: Conversation, current_user_id: str) -> ConversationOut:
-    from ..schemas import UserOut
-    other = conv.buyer if conv.seller_id == current_user_id else conv.seller
+async def _build_conv_out(
+    conv: Conversation,
+    current_user_id: str,
+    db: AsyncSession,
+) -> ConversationOut:
+    # Load listing separately (no relationship on model)
+    listing_title: Optional[str] = None
     listing_image_url: Optional[str] = None
-    if conv.listing and conv.listing.images:
-        listing_image_url = build_public_url(conv.listing.images[0].r2_key)
-    unread = sum(
-        1 for m in conv.messages
-        if m.sender_id != current_user_id and m.read_at is None
+
+    listing_result = await db.execute(
+        select(Listing).where(Listing.id == conv.listing_id)
     )
+    listing = listing_result.scalar_one_or_none()
+    if listing:
+        listing_title = listing.title
+        img_result = await db.execute(
+            select(ListingImage)
+            .where(ListingImage.listing_id == listing.id)
+            .order_by(ListingImage.sort_order)
+            .limit(1)
+        )
+        first_img = img_result.scalar_one_or_none()
+        if first_img:
+            listing_image_url = build_public_url(first_img.r2_key)
+
+    # Unread count
+    unread_result = await db.execute(
+        select(Message)
+        .where(
+            Message.conversation_id == conv.id,
+            Message.sender_id != current_user_id,
+            Message.read_at == None,  # noqa: E711
+        )
+    )
+    unread = len(unread_result.scalars().all())
+
+    # Other user
+    other_user_id = conv.seller_id if conv.buyer_id == current_user_id else conv.buyer_id
+    other_result = await db.execute(select(User).where(User.id == other_user_id))
+    other_user = other_result.scalar_one_or_none()
+
     return ConversationOut(
         id=conv.id,
         listing_id=conv.listing_id,
         buyer_id=conv.buyer_id,
         seller_id=conv.seller_id,
-        listing_title=conv.listing.title if conv.listing else None,
+        listing_title=listing_title,
         listing_image_url=listing_image_url,
         last_message=conv.last_message,
         last_message_at=conv.last_message_at,
         unread_count=unread,
-        other_user=UserOut.model_validate(other) if other else None,
+        other_user=UserOut.model_validate(other_user) if other_user else None,
         created_at=conv.created_at,
     )
 
@@ -56,12 +87,6 @@ async def get_conversations(
 ):
     result = await db.execute(
         select(Conversation)
-        .options(
-            selectinload(Conversation.buyer),
-            selectinload(Conversation.seller),
-            selectinload(Conversation.listing).selectinload(Listing.images),
-            selectinload(Conversation.messages),
-        )
         .where(
             (Conversation.buyer_id == current_user.id)
             | (Conversation.seller_id == current_user.id)
@@ -69,7 +94,10 @@ async def get_conversations(
         .order_by(Conversation.last_message_at.desc().nullslast())
     )
     convs = result.scalars().all()
-    return [_conv_out(c, current_user.id) for c in convs]
+    out = []
+    for c in convs:
+        out.append(await _build_conv_out(c, current_user.id, db))
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -81,55 +109,30 @@ async def start_conversation(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    # Load listing
-    result = await db.execute(
-        select(Listing).options(selectinload(Listing.images)).where(Listing.id == listing_id)
-    )
+    result = await db.execute(select(Listing).where(Listing.id == listing_id))
     listing = result.scalar_one_or_none()
     if not listing:
         raise HTTPException(status_code=404, detail="বিজ্ঞাপনটি পাওয়া যায়নি")
     if listing.seller_id == current_user.id:
         raise HTTPException(status_code=400, detail="নিজের বিজ্ঞাপনে চ্যাট করা যাবে না")
 
-    # Check existing
-    result = await db.execute(
-        select(Conversation)
-        .options(
-            selectinload(Conversation.buyer),
-            selectinload(Conversation.seller),
-            selectinload(Conversation.listing).selectinload(Listing.images),
-            selectinload(Conversation.messages),
-        )
-        .where(
+    existing = await db.execute(
+        select(Conversation).where(
             (Conversation.listing_id == listing_id)
             & (Conversation.buyer_id == current_user.id)
         )
     )
-    existing = result.scalar_one_or_none()
-    if existing:
-        return _conv_out(existing, current_user.id)
-
-    conv = Conversation(
-        listing_id=listing_id,
-        buyer_id=current_user.id,
-        seller_id=listing.seller_id,
-    )
-    db.add(conv)
-    await db.flush()
-
-    # Reload with relations
-    result = await db.execute(
-        select(Conversation)
-        .options(
-            selectinload(Conversation.buyer),
-            selectinload(Conversation.seller),
-            selectinload(Conversation.listing).selectinload(Listing.images),
-            selectinload(Conversation.messages),
+    conv = existing.scalar_one_or_none()
+    if not conv:
+        conv = Conversation(
+            listing_id=listing_id,
+            buyer_id=current_user.id,
+            seller_id=listing.seller_id,
         )
-        .where(Conversation.id == conv.id)
-    )
-    conv = result.scalar_one()
-    return _conv_out(conv, current_user.id)
+        db.add(conv)
+        await db.flush()
+
+    return await _build_conv_out(conv, current_user.id, db)
 
 
 # ---------------------------------------------------------------------------
@@ -138,14 +141,11 @@ async def start_conversation(
 @router.get("/conversations/{conv_id}/messages", response_model=List[MessageOut])
 async def get_messages(
     conv_id: str,
-    after: Optional[str] = Query(None, description="ISO timestamp — return only messages after this"),
+    after: Optional[str] = Query(None),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    # Verify membership
-    result = await db.execute(
-        select(Conversation).where(Conversation.id == conv_id)
-    )
+    result = await db.execute(select(Conversation).where(Conversation.id == conv_id))
     conv = result.scalar_one_or_none()
     if not conv:
         raise HTTPException(status_code=404, detail="কথোপকথনটি পাওয়া যায়নি")
@@ -169,9 +169,9 @@ async def get_messages(
     await db.execute(
         update(Message)
         .where(
-            (Message.conversation_id == conv_id)
-            & (Message.sender_id != current_user.id)
-            & (Message.read_at == None)
+            Message.conversation_id == conv_id,
+            Message.sender_id != current_user.id,
+            Message.read_at == None,  # noqa: E711
         )
         .values(read_at=now)
     )
@@ -207,20 +207,19 @@ async def send_message(
     )
     db.add(msg)
 
-    # Update conversation last_message
     conv.last_message = payload.content[:200]
     conv.last_message_at = now
     db.add(conv)
 
-    # If this is an offer message, upsert PriceOffer on the listing
+    # Upsert PriceOffer if this is an offer message
     if payload.is_offer and payload.offer_amount:
-        existing_offer = await db.execute(
+        existing = await db.execute(
             select(PriceOffer).where(
-                (PriceOffer.listing_id == conv.listing_id)
-                & (PriceOffer.buyer_id == current_user.id)
+                PriceOffer.listing_id == conv.listing_id,
+                PriceOffer.buyer_id == current_user.id,
             )
         )
-        offer = existing_offer.scalar_one_or_none()
+        offer = existing.scalar_one_or_none()
         if offer:
             offer.offered_price = payload.offer_amount
             offer.created_at = now

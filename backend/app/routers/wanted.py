@@ -1,7 +1,6 @@
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
-from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db
@@ -12,20 +11,29 @@ from ..auth import get_current_user
 router = APIRouter(prefix="/wanted", tags=["wanted"])
 
 
-def _wanted_out(post: WantedPost) -> WantedPostOut:
-    inst_name = None
+async def _wanted_out(post: WantedPost, db: AsyncSession) -> WantedPostOut:
+    # Load user name
+    user_name: Optional[str] = None
+    user_result = await db.execute(select(User).where(User.id == post.user_id))
+    user = user_result.scalar_one_or_none()
+    if user:
+        user_name = user.name
+
+    # Load institute name
+    institute_name: Optional[str] = None
     if post.institute_id:
-        # institute may be loaded via selectinload
-        pass
+        inst_result = await db.execute(select(Institute).where(Institute.id == post.institute_id))
+        inst = inst_result.scalar_one_or_none()
+        if inst:
+            institute_name = inst.name
+
     return WantedPostOut(
         id=post.id,
         user_id=post.user_id,
-        user_name=post.user.name if hasattr(post, "user") and post.user else None,
+        user_name=user_name,
         title=post.title,
         institute_id=post.institute_id,
-        institute_name=(
-            post.institute.name if hasattr(post, "institute") and post.institute else None
-        ),
+        institute_name=institute_name,
         level_label=post.level_label,
         description=post.description,
         fulfilled=post.fulfilled,
@@ -40,14 +48,11 @@ async def list_wanted(
 ):
     result = await db.execute(
         select(WantedPost)
-        .options(
-            selectinload(WantedPost.user),
-            selectinload(WantedPost.institute),
-        )
         .where(WantedPost.fulfilled == fulfilled)
         .order_by(WantedPost.created_at.desc())
     )
-    return [_wanted_out(p) for p in result.scalars().all()]
+    posts = result.scalars().all()
+    return [await _wanted_out(p, db) for p in posts]
 
 
 @router.post("", response_model=WantedPostOut, status_code=201)
@@ -65,13 +70,7 @@ async def create_wanted(
     )
     db.add(post)
     await db.flush()
-    # Reload
-    result = await db.execute(
-        select(WantedPost)
-        .options(selectinload(WantedPost.user), selectinload(WantedPost.institute))
-        .where(WantedPost.id == post.id)
-    )
-    return _wanted_out(result.scalar_one())
+    return await _wanted_out(post, db)
 
 
 @router.post("/{post_id}/fulfill", response_model=WantedPostOut)
@@ -80,11 +79,7 @@ async def fulfill_wanted(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(
-        select(WantedPost)
-        .options(selectinload(WantedPost.user), selectinload(WantedPost.institute))
-        .where(WantedPost.id == post_id)
-    )
+    result = await db.execute(select(WantedPost).where(WantedPost.id == post_id))
     post = result.scalar_one_or_none()
     if not post:
         raise HTTPException(status_code=404, detail="পোস্টটি পাওয়া যায়নি")
@@ -92,7 +87,7 @@ async def fulfill_wanted(
         raise HTTPException(status_code=403, detail="এই পোস্ট পরিবর্তন করার অনুমতি নেই")
     post.fulfilled = True
     db.add(post)
-    return _wanted_out(post)
+    return await _wanted_out(post, db)
 
 
 @router.delete("/{post_id}", status_code=204)
@@ -117,25 +112,26 @@ async def get_wanted_offers(
 ):
     result = await db.execute(
         select(WantedOffer)
-        .options(selectinload(WantedOffer.seller))
         .where(WantedOffer.wanted_id == post_id)
         .order_by(WantedOffer.created_at.desc())
     )
     offers = result.scalars().all()
-    return [
-        WantedOfferOut(
+    out = []
+    for o in offers:
+        seller_result = await db.execute(select(User).where(User.id == o.seller_id))
+        seller = seller_result.scalar_one_or_none()
+        out.append(WantedOfferOut(
             id=o.id,
             wanted_id=o.wanted_id,
             seller_id=o.seller_id,
-            seller_name=o.seller.name if o.seller else None,
+            seller_name=seller.name if seller else None,
             condition=o.condition,
             price=o.price,
             location=o.location,
             description=o.description,
             created_at=o.created_at,
-        )
-        for o in offers
-    ]
+        ))
+    return out
 
 
 @router.post("/{post_id}/offers", response_model=WantedOfferOut, status_code=201)
