@@ -2,8 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { BookOpen, PlusCircle, User, Menu, X, MessageCircle, Heart, Shield } from 'lucide-react';
-import { useState } from 'react';
+import { BookOpen, PlusCircle, User, MessageCircle, Heart, Shield } from 'lucide-react';
 import Image from 'next/image';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -14,7 +13,6 @@ export default function Navbar() {
   const { t } = useLanguage();
   const { isAuthenticated, user, logout } = useAuth();
   const pathname = usePathname();
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const isAdminPage = pathname.startsWith('/admin');
 
@@ -126,84 +124,13 @@ export default function Navbar() {
             )}
           </div>
 
-          {/* Mobile Menu Button */}
+          {/* Mobile: only language toggle, no hamburger (bottom nav covers all navigation) */}
           <div className="flex md:hidden items-center gap-2">
             <LanguageToggle />
-            {!isAdminPage && (
-              <button
-                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="p-2 rounded-lg hover:bg-warm-surface text-text-secondary cursor-pointer"
-              >
-                {mobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
-              </button>
-            )}
           </div>
         </div>
 
-        {/* Mobile Menu */}
-        {!isAdminPage && mobileMenuOpen && (
-          <div className="md:hidden py-3 border-t border-border-warm space-y-1 animate-in slide-in-from-top-2 duration-200">
-            {navLinks.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                onClick={() => setMobileMenuOpen(false)}
-                className={cn(
-                  'flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
-                  pathname === link.href
-                    ? 'bg-primary-50 text-primary'
-                    : 'text-text-secondary hover:bg-warm-surface'
-                )}
-              >
-                <link.icon size={18} />
-                {link.label}
-              </Link>
-            ))}
-            {authLinks.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                onClick={() => setMobileMenuOpen(false)}
-                className={cn(
-                  'flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
-                  pathname === link.href
-                    ? 'bg-primary-50 text-primary'
-                    : 'text-text-secondary hover:bg-warm-surface'
-                )}
-              >
-                <link.icon size={18} />
-                {link.label}
-              </Link>
-            ))}
-            <div className="pt-2 border-t border-border-warm mt-2">
-              {isAuthenticated ? (
-                <button
-                  onClick={() => { logout(); setMobileMenuOpen(false); }}
-                  className="w-full text-left px-3 py-2.5 text-sm font-medium text-error hover:bg-error-light rounded-lg transition-colors cursor-pointer"
-                >
-                  {t('nav.logout')}
-                </button>
-              ) : (
-                <div className="flex gap-2 px-3">
-                  <Link
-                    href="/login"
-                    onClick={() => setMobileMenuOpen(false)}
-                    className="flex-1 text-center py-2.5 text-sm font-medium text-primary border border-primary rounded-lg hover:bg-primary-50"
-                  >
-                    {t('nav.login')}
-                  </Link>
-                  <Link
-                    href="/signup"
-                    onClick={() => setMobileMenuOpen(false)}
-                    className="flex-1 text-center py-2.5 text-sm font-medium text-white bg-primary rounded-lg hover:bg-primary-dark"
-                  >
-                    {t('nav.signup')}
-                  </Link>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
+        {/* Mobile menu dropdown removed — bottom nav handles all navigation on mobile */}
       </div>
     </nav>
   );

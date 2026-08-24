@@ -34,9 +34,36 @@ def _image_out(img: ListingImage) -> ListingImageOut:
 
 
 def _listing_out(listing: Listing, distance_m: Optional[float] = None) -> ListingOut:
-    out = ListingOut.model_validate(listing)
-    out.images = [_image_out(i) for i in listing.images]
-    out.distance_m = distance_m
+    # Build images manually — the ORM model has no `url` column, only `r2_key`,
+    # so Pydantic's model_validate would fail on ListingImageOut.url.
+    images = [_image_out(i) for i in listing.images]
+
+    out = ListingOut(
+        id=listing.id,
+        seller_id=listing.seller_id,
+        seller=listing.seller,
+        category_slug=listing.category_slug,
+        institute_id=listing.institute_id,
+        institute=listing.institute,
+        title=listing.title,
+        author=listing.author,
+        description_bn=listing.description_bn,
+        description_en=listing.description_en,
+        condition=listing.condition,
+        level_label=listing.level_label,
+        price=listing.price,
+        negotiable=listing.negotiable,
+        quantity=listing.quantity,
+        status=listing.status,
+        contact_preference=listing.contact_preference,
+        whatsapp_number=listing.whatsapp_number,
+        lat=listing.lat,
+        lng=listing.lng,
+        images=images,
+        view_count=listing.view_count,
+        created_at=listing.created_at,
+        distance_m=distance_m,
+    )
     return out
 
 
