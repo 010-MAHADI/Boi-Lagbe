@@ -1,15 +1,44 @@
+from urllib.parse import urlparse, urlunparse, parse_qs, urlencode
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
 from .config import get_settings
 
 settings = get_settings()
 
-# Convert postgres:// to postgresql+asyncpg:// for async driver
-_db_url = settings.DATABASE_URL
-if _db_url.startswith("postgres://"):
-    _db_url = _db_url.replace("postgres://", "postgresql+asyncpg://", 1)
-elif _db_url.startswith("postgresql://"):
-    _db_url = _db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+
+def _build_engine_url(raw: str) -> tuple[str, dict]:
+    """
+    asyncpg does not accept ?sslmode= as a query parameter.
+    Strip it from the URL and return ssl connect_args instead.
+    """
+    # Normalise scheme
+    if raw.startswith("postgres://"):
+        raw = raw.replace("postgres://", "postgresql+asyncpg://", 1)
+    elif raw.startswith("postgresql://"):
+        raw = raw.replace("postgresql://", "postgresql+asyncpg://", 1)
+
+    parsed = urlparse(raw)
+    params = parse_qs(parsed.query, keep_blank_values=True)
+
+    # Pull out sslmode — asyncpg doesn't understand it
+    sslmode = params.pop("sslmode", [""])[0]
+
+    # Rebuild URL without sslmode
+    clean_query = urlencode({k: v[0] for k, v in params.items()})
+    clean_url = urlunparse(parsed._replace(query=clean_query))
+
+    # Map sslmode → asyncpg ssl kwarg
+    connect_args: dict = {}
+    if sslmode in ("require", "verify-ca", "verify-full"):
+        connect_args["ssl"] = "require"
+    elif sslmode == "prefer":
+        connect_args["ssl"] = "prefer"
+    # disable / allow → no ssl kwarg needed
+
+    return clean_url, connect_args
+
+
+_db_url, _connect_args = _build_engine_url(settings.DATABASE_URL)
 
 engine = create_async_engine(
     _db_url,
@@ -17,6 +46,7 @@ engine = create_async_engine(
     pool_pre_ping=True,
     pool_size=5,
     max_overflow=10,
+    connect_args=_connect_args,
 )
 
 AsyncSessionLocal = async_sessionmaker(
