@@ -1,139 +1,298 @@
-# Deployment Guide for **Boi Lagbe** (বই লাগবে)
+# Deployment Guide — বই লাগবে (Boi Lagbe)
 
-> This guide walks you through deploying the Next.js application to **Vercel** (frontend) and storing static assets (e.g., book‑cover placeholders, user avatars) on **Cloudflare R2**.  It assumes you already have a free Vercel account and a Cloudflare R2 bucket.
+> **Current architecture:** Next.js frontend + FastAPI backend, both deployed to Vercel. Neon serverless PostgreSQL as the database. Cloudflare R2 for image storage.
 
 ---
 
 ## 📦 Prerequisites
 
-- **Node.js** (v20 or later) installed locally.
-- **Git** repository for the project (the folder `Boi‑Lagbe` should be committed).
-- A **Vercel** account (free tier is enough for the MVP).
-- A **Cloudflare** account with **R2** enabled and a bucket created (e.g., `boi-lagbe-assets`).
-- **`vercel` CLI** installed globally:
-  ```bash
-  npm i -g vercel
-  ```
+| Tool | Purpose | Install |
+|------|---------|---------|
+| Node.js v20+ | Build the Next.js frontend | [nodejs.org](https://nodejs.org) |
+| Python 3.11+ | Run the FastAPI backend | [python.org](https://www.python.org) |
+| Git | Version control | [git-scm.com](https://git-scm.com) |
+| Vercel account | Host both frontend + backend | [vercel.com](https://vercel.com) (free) |
+| Neon account | Serverless PostgreSQL | [neon.tech](https://neon.tech) (free) |
+| Cloudflare account | R2 image storage | [cloudflare.com](https://cloudflare.com) (free) |
 
 ---
 
-## ☁️ Cloudflare R2 Setup
+## 1️⃣ Neon PostgreSQL Setup
 
-1. **Create a Bucket**
-   - Log in to the Cloudflare dashboard → **R2** → **Create bucket**.
-   - Choose a name (e.g., `boi-lagbe-assets`). Remember the bucket name – you’ll need it as an env var.
-
-2. **Generate Access Keys**
-   - In the **R2** section click **Create Access Keys**.
-   - You’ll receive an **Access Key ID** and **Secret Access Key**. Store them securely; they are used as environment variables in Vercel.
-
-3. **Configure CORS (optional but recommended)**
-   - Still in the R2 dashboard → **Settings** → **CORS**.
-   - Add your Vercel domain (e.g., `https://boi‑lagbe.vercel.app`) to `Allowed Origins`.
-   - Allow methods: `GET, HEAD, OPTIONS`.
-   - Allow headers: `*` (or at least `Content-Type`).
-
-4. **Upload the placeholder assets** (if you want them in R2 instead of `public/`):
-   ```bash
-   # Install the Cloudflare R2 CLI tool (wrangler)
-   npm i -g wrangler
-   wrangler r2 cp ./public/images/book-placeholder.svg r2://boi-lagbe-assets/book-placeholder.svg
-   wrangler r2 cp ./public/images/avatar-placeholder.svg r2://boi-lagbe-assets/avatar-placeholder.svg
+1. Go to [console.neon.tech](https://console.neon.tech) → **New Project**
+2. Choose a region close to your users (e.g. `ap-southeast-1` for Bangladesh)
+3. Copy the **Connection string** — it looks like:
    ```
-   > The app currently loads assets from `public/`.  If you decide to serve them from R2, replace the URLs with:
-   ```ts
-   const BOOK_PLACEHOLDER = `https://<ACCOUNT_ID>.r2.cloudflarestorage.com/boi-lagbe-assets/book-placeholder.svg`;
+   postgresql://user:password@ep-xxx-yyy.ap-southeast-1.aws.neon.tech/neondb?sslmode=require
+   ```
+4. Keep this — it goes into `DATABASE_URL`
+
+---
+
+## 2️⃣ Cloudflare R2 Setup
+
+### Create a Bucket
+1. Cloudflare dashboard → **R2 Object Storage** → **Create bucket**
+2. Name it `boi-lagbe-assets`
+3. Leave all other settings as default
+
+### Get Your Account ID
+In the R2 overview page, copy the **Account ID** from the right sidebar (or from the S3 API URL shown in bucket settings).
+
+### Generate API Keys
+1. R2 overview page → **Manage R2 API tokens** (top-right link)
+2. **Create API token** → name it `boi-lagbe-token`
+3. Permissions: **Object Read & Write**, Bucket: `boi-lagbe-assets`
+4. Copy the **Access Key ID** and **Secret Access Key** — the secret is only shown once
+
+### Enable Public Development URL
+1. Go into the `boi-lagbe-assets` bucket → **Settings** → **Public Development URL**
+2. Click **Enable** — you'll get a URL like `https://pub-xxxxxxxxxxxxxxxx.r2.dev`
+3. This becomes `R2_PUBLIC_URL` and `NEXT_PUBLIC_R2_PUBLIC_URL`
+
+### Configure CORS
+1. Bucket settings → **CORS Policy** → add this JSON:
+   ```json
+   [
+     {
+       "AllowedOrigins": ["https://your-frontend.vercel.app", "http://localhost:3000"],
+       "AllowedMethods": ["GET", "HEAD", "PUT"],
+       "AllowedHeaders": ["*"],
+       "MaxAgeSeconds": 3600
+     }
+   ]
    ```
 
 ---
 
-## 🚀 Vercel Deployment (Frontend)
+## 3️⃣ Run the Database Migration
 
-### 1️⃣ Connect the Repository
-1. Go to **vercel.com/dashboard** → **New Project**.
-2. Import the Git repository (GitHub, GitLab, or Bitbucket) that contains `Boi‑Lagbe`.
-3. Vercel automatically detects a **Next.js** app. Keep the default settings:
-   - **Framework preset**: `Next.js`
-   - **Build command**: `npm run build`
-   - **Output directory**: `.next`
-   - **Install command**: `npm ci`
+Once you have your Neon connection string, run the migration script once to create all tables and search indexes.
 
-### 2️⃣ Add Environment Variables
-| Variable | Value | Description |
-|----------|-------|-------------|
-| `NEXT_PUBLIC_R2_BUCKET` | `boi-lagbe-assets` | Bucket name (used by the client to build URLs). |
-| `R2_ACCESS_KEY_ID` | *your Access Key ID* | Secret key for server‑side API routes (if you ever need to upload directly). |
-| `R2_SECRET_ACCESS_KEY` | *your Secret Access Key* | Same as above. |
-| `NEXT_PUBLIC_BASE_URL` | `https://boi‑lagbe.vercel.app` | Used by the mock API layer for absolute URLs (optional). |
-
-1. In the Vercel dashboard → **Project Settings → Environment Variables**.
-2. Click **Add** for each variable, set the **Target** to **All (Preview & Production)**, and paste the values.
-
-### 3️⃣ Deploy
-- **Automatic Deploy**: Every push to the main branch triggers a preview deployment.
-- **Manual Deploy** (optional):
-  ```bash
-  vercel --prod   # from the project root
-  ```
-  This forces a production build.
-
-### 4️⃣ Verify
-1. Open the generated URL, e.g., `https://boi‑lagbe.vercel.app`.
-2. Check that:
-   - The homepage loads with the warm color palette.
-   - Listings appear (mock data).
-   - Images (book/avatar placeholders) show correctly.
-   - Language toggle switches between Bangla and English.
-
----
-
-## 🌐 Optional: Custom Domain
-1. In Vercel → **Domain** → **Add**.
-2. Enter your domain (e.g., `boilagbe.com`).
-3. Follow the DNS instructions (add an **A** record pointing to Vercel’s IP or use a **CNAME** to `cname.vercel-dns.com`).
-4. Once the DNS propagates, Vercel will automatically provision an SSL certificate.
-
----
-
-## 📦 What Happens Under the Hood?
-- **Vercel** builds the Next.js project, bundles the Tailwind CSS, and serves the static files from a global edge network.
-- **R2** acts as an object store for any large assets (images, PDFs).  The frontend fetches them via a public URL (`https://<ACCOUNT_ID>.r2.cloudflarestorage.com/<bucket>/<object>`).
-- Because the app is *mock‑API* only, there is no backend server to run.  In a future phase you could replace the `/api/*` routes with a FastAPI service (hosted on Railway, Render, or Cloudflare Workers) and point the Vercel app to that endpoint via an env var.
-
----
-
-## 🛠️ Updating After a Change
-1. Commit your changes locally:
-   ```bash
-   git add .
-   git commit -m "Update UI / fix bugs"
-   git push origin main
-   ```
-2. Vercel will automatically run a new build and publish a preview.  When you are happy, click **Promote to Production** (or use `vercel --prod`).
-
----
-
-## 📚 TL;DR – One‑Liner Deploy
 ```bash
-# 1️⃣ Create .env.local (optional for local dev)
-cat <<EOF > .env.local
-NEXT_PUBLIC_R2_BUCKET=boi-lagbe-assets
-R2_ACCESS_KEY_ID=YOUR_ID
-R2_SECRET_ACCESS_KEY=YOUR_SECRET
-EOF
+cd backend
 
-# 2️⃣ Push to Git & let Vercel do its magic
-git add . && git commit -m "Deploy" && git push
+# Install dependencies
+pip install -r requirements.txt
 
-# OR manual prod deploy
+# Copy the env template and fill in your values
+copy .env.example .env
+# (edit .env — at minimum set DATABASE_URL, SECRET_KEY, R2_* vars)
+
+# Create tables + enable pg_trgm extension + create GIN search indexes
+python -m app.migrate
+
+# Seed 20 institutes + admin user (mahadi379377@gmail.com / idahamsm@)
+python -m app.seed
+```
+
+If the `pg_trgm` extension step fails with a permissions error, run this manually in the Neon SQL editor:
+```sql
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE EXTENSION IF NOT EXISTS unaccent;
+```
+
+---
+
+## 4️⃣ Deploy the FastAPI Backend to Vercel
+
+The backend lives in the `backend/` folder and has its own `vercel.json`.
+
+### Option A — Vercel Dashboard (recommended)
+1. Vercel dashboard → **New Project** → Import the same GitHub repo
+2. Set **Root Directory** to `backend`
+3. Framework preset: **Other**
+4. Add the following **Environment Variables**:
+
+| Variable | Value |
+|----------|-------|
+| `DATABASE_URL` | Your Neon connection string |
+| `SECRET_KEY` | A random 64-char string (see below) |
+| `R2_ACCESS_KEY_ID` | From Cloudflare R2 API token |
+| `R2_SECRET_ACCESS_KEY` | From Cloudflare R2 API token |
+| `R2_BUCKET_NAME` | `boi-lagbe-assets` |
+| `R2_ACCOUNT_ID` | Your Cloudflare Account ID |
+| `R2_PUBLIC_URL` | `https://pub-xxxxxxxxxxxxxxxx.r2.dev` |
+| `FRONTEND_URL` | Your frontend Vercel URL (set after frontend is deployed) |
+| `ENVIRONMENT` | `production` |
+
+Generate a secure `SECRET_KEY`:
+```bash
+python -c "import secrets; print(secrets.token_hex(32))"
+```
+
+5. Deploy → note the backend URL (e.g. `https://boi-lagbe-api.vercel.app`)
+
+### Option B — Vercel CLI
+```bash
+cd backend
+vercel --prod
+# Follow the prompts, then set env vars in the Vercel dashboard
+```
+
+---
+
+## 5️⃣ Deploy the Next.js Frontend to Vercel
+
+### Option A — Vercel Dashboard
+1. Vercel dashboard → **New Project** → Import the same GitHub repo
+2. **Root Directory**: leave as `/` (the repo root)
+3. Framework preset: **Next.js** (auto-detected)
+4. Add **Environment Variables**:
+
+| Variable | Value |
+|----------|-------|
+| `NEXT_PUBLIC_API_URL` | Your backend Vercel URL (e.g. `https://boi-lagbe-api.vercel.app`) |
+| `NEXT_PUBLIC_R2_PUBLIC_URL` | `https://pub-xxxxxxxxxxxxxxxx.r2.dev` |
+
+5. Deploy
+
+### Option B — Vercel CLI
+```bash
+# From the repo root
+cp .env.local.example .env.local
+# Fill in NEXT_PUBLIC_API_URL and NEXT_PUBLIC_R2_PUBLIC_URL
+
 vercel --prod
 ```
 
 ---
 
-### 🎉 Done!
-Your **Boi Lagbe** marketplace is now live on Vercel and ready to serve assets from Cloudflare R2. 🎓
+## 6️⃣ Wire Frontend ↔ Backend
+
+After both are deployed:
+
+1. In the **backend** Vercel project → Settings → Environment Variables
+   - Update `FRONTEND_URL` to your actual frontend URL (e.g. `https://boi-lagbe.vercel.app`)
+   - Click **Redeploy** (no code change needed, just a redeploy to pick up the new env var)
+
+2. Verify the CORS is working by opening your frontend URL and checking that the API calls succeed in the browser Network tab.
 
 ---
 
-*If you ever need to switch to a real backend, replace the `src/app/api/*` mock routes with a FastAPI service and update the environment variable `NEXT_PUBLIC_API_URL` accordingly.*
+## 7️⃣ Verify Everything Works
+
+Open the frontend URL and run through this checklist:
+
+- [ ] Homepage loads with listings from the database (not mock data)
+- [ ] Signup creates a real account (check Neon dashboard → users table)
+- [ ] Login returns a JWT and persists across page refresh
+- [ ] Posting a new listing uploads images to R2 (check R2 bucket → Objects tab)
+- [ ] The listing is visible from a different browser / device
+- [ ] Chat messages persist across page reload
+- [ ] Language toggle switches between Bangla and English
+- [ ] Admin panel accessible at `/admin` with `mahadi379377@gmail.com` / `idahamsm@`
+
+---
+
+## 🌐 Custom Domain (optional)
+
+1. Vercel → your frontend project → **Domains** → **Add**
+2. Enter `boilagbe.com` (or your domain)
+3. Add a **CNAME** record pointing to `cname.vercel-dns.com` in your DNS provider
+4. Vercel provisions SSL automatically once DNS propagates (~5 min to 48h)
+5. Also update `FRONTEND_URL` in the backend env vars to the custom domain
+
+---
+
+## � Updating After a Code Change
+
+```bash
+git add .
+git commit -m "your change description"
+git push origin main
+```
+
+Vercel automatically triggers a new build and deployment for both the frontend and backend projects when you push to `main`.
+
+To force a production deploy without a code change (e.g. after updating env vars):
+```bash
+vercel --prod          # from repo root (frontend)
+cd backend && vercel --prod   # backend
+```
+
+---
+
+## 📐 Environment Variables Reference
+
+### Frontend (`.env.local` / Vercel frontend project)
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `NEXT_PUBLIC_API_URL` | ✅ Yes | FastAPI backend base URL. In dev: `http://localhost:8000`. In prod: your backend Vercel URL. |
+| `NEXT_PUBLIC_R2_PUBLIC_URL` | ✅ Yes | R2 public development URL for displaying uploaded images. |
+
+### Backend (`backend/.env` / Vercel backend project)
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DATABASE_URL` | ✅ Yes | Neon PostgreSQL connection string (`postgresql://...?sslmode=require`) |
+| `SECRET_KEY` | ✅ Yes | JWT signing secret — 64 random hex chars |
+| `R2_ACCESS_KEY_ID` | ✅ Yes | Cloudflare R2 API token Access Key ID |
+| `R2_SECRET_ACCESS_KEY` | ✅ Yes | Cloudflare R2 API token Secret |
+| `R2_BUCKET_NAME` | ✅ Yes | R2 bucket name (default: `boi-lagbe-assets`) |
+| `R2_ACCOUNT_ID` | ✅ Yes | Cloudflare Account ID |
+| `R2_PUBLIC_URL` | ✅ Yes | Public R2 URL (e.g. `https://pub-xxx.r2.dev`) |
+| `FRONTEND_URL` | ✅ Yes | Frontend URL for CORS (e.g. `https://boi-lagbe.vercel.app`) |
+| `ENVIRONMENT` | ✅ Yes | `development` or `production` |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | ❌ Optional | JWT lifetime in minutes (default: 10080 = 7 days) |
+
+---
+
+## 🏠 Local Development
+
+### Backend
+```bash
+cd backend
+pip install -r requirements.txt
+copy .env.example .env
+# Fill in DATABASE_URL (use Neon dev branch), SECRET_KEY, R2 vars
+
+# Run database migration once
+python -m app.migrate
+python -m app.seed
+
+# Start the dev server
+uvicorn app.main:app --reload --port 8000
+# API docs available at http://localhost:8000/api/docs
+```
+
+### Frontend
+```bash
+# From repo root
+copy .env.local.example .env.local
+# Set NEXT_PUBLIC_API_URL=http://localhost:8000
+
+npm install
+npm run dev
+# App available at http://localhost:3000
+```
+
+---
+
+## 🆓 Free Tier Limits (August 2026)
+
+| Service | Free Tier | Limit to watch |
+|---------|-----------|----------------|
+| Vercel Hobby | 100 GB bandwidth/month, ~1M function invocations | 10s function timeout on free tier |
+| Neon Free | 0.5 GB storage, 100 compute-hours/month | Cold start ~300ms after 5min idle |
+| Cloudflare R2 | 10 GB storage, 1M writes/month, 10M reads/month | **Zero egress fees** — no surprise bills |
+
+---
+
+## 🛠️ Troubleshooting
+
+**"বিজ্ঞাপন প্রকাশে ত্রুটি হয়েছে" when creating a listing**
+→ Check that `NEXT_PUBLIC_API_URL` points to the correct backend URL and the backend is deployed.
+
+**Images not showing after upload**
+→ Verify `R2_PUBLIC_URL` (backend) and `NEXT_PUBLIC_R2_PUBLIC_URL` (frontend) both point to the same R2 public URL. Check CORS is configured on the R2 bucket.
+
+**Login always fails**
+→ Confirm `DATABASE_URL` is correct and `python -m app.migrate` + `python -m app.seed` have been run.
+
+**CORS error in browser console**
+→ Update `FRONTEND_URL` in the backend env vars to match your exact frontend URL (no trailing slash).
+
+**Neon connection timeout on first request**
+→ Expected — Neon's free tier scales to zero after 5 minutes idle. The first query after inactivity takes ~300ms to wake up.
