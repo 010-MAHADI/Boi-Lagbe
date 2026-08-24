@@ -92,19 +92,23 @@ async def search_listings(
     if max_price is not None:
         stmt = stmt.where(Listing.price <= max_price)
     if division:
-        stmt = stmt.join(Institute, Listing.institute_id == Institute.id, isouter=True).where(
-            or_(Institute.division == division, Institute.division == None)
+        # Only add join if institute_type filter didn't already join
+        if not institute_type:
+            stmt = stmt.join(Institute, Listing.institute_id == Institute.id, isouter=True)
+        stmt = stmt.where(
+            or_(Institute.division == division, Listing.institute_id == None)
         )
 
     # --- full-text + trigram search (§8) ---
+    # Use ILIKE only — similarity() requires pg_trgm loaded in the session
+    # which is not guaranteed on Vercel serverless cold starts
     if q:
-        # Try to use pg_trgm similarity; fall back to ILIKE if not available
+        pattern = f"%{q}%"
         stmt = stmt.where(
             or_(
-                func.similarity(Listing.title, q) > 0.2,
-                Listing.title.ilike(f"%{q}%"),
-                Listing.description_bn.ilike(f"%{q}%"),
-                Listing.description_en.ilike(f"%{q}%"),
+                Listing.title.ilike(pattern),
+                Listing.description_bn.ilike(pattern),
+                Listing.description_en.ilike(pattern),
             )
         )
 

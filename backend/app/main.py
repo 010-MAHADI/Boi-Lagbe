@@ -28,9 +28,9 @@ app.add_middleware(
         "http://localhost:3000",
         "https://boilagbe.vercel.app",
         "https://boi-lagbe.vercel.app",
-        "https://boilagbe.site"
-        
+        "https://boilagbe.site",
     ],
+    allow_origin_regex=r"https://boilagbe.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
