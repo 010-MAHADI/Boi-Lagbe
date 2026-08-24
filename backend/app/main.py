@@ -26,7 +26,10 @@ app.add_middleware(
     allow_origins=[
         settings.FRONTEND_URL,
         "http://localhost:3000",
+        "https://boilagbe.vercel.app",
         "https://boi-lagbe.vercel.app",
+        "https://boilagbe.site"
+        
     ],
     allow_credentials=True,
     allow_methods=["*"],

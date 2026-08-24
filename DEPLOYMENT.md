@@ -65,7 +65,7 @@ In the R2 overview page, copy the **Account ID** from the right sidebar (or from
 
 ---
 
-## 3️⃣ Run the Database Migration
+## 3️⃣ Run the Database Migration in local
 
 Once you have your Neon connection string, run the migration script once to create all tables and search indexes.
 
