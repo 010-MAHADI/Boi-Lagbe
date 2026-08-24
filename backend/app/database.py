@@ -1,6 +1,7 @@
 from urllib.parse import urlparse, urlunparse, parse_qs, urlencode
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.pool import NullPool
 from .config import get_settings
 
 settings = get_settings()
@@ -40,12 +41,13 @@ def _build_engine_url(raw: str) -> tuple[str, dict]:
 
 _db_url, _connect_args = _build_engine_url(settings.DATABASE_URL)
 
+# NullPool is required for Vercel serverless — each function invocation is
+# stateless and short-lived so SQLAlchemy's connection pool cannot maintain
+# persistent connections across invocations, causing 500s on cold starts.
 engine = create_async_engine(
     _db_url,
     echo=settings.ENVIRONMENT == "development",
-    pool_pre_ping=True,
-    pool_size=5,
-    max_overflow=10,
+    poolclass=NullPool,
     connect_args=_connect_args,
 )
 
