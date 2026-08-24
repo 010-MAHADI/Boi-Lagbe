@@ -208,6 +208,10 @@ export const uploadApi = {
     await uploadApi.putToR2(upload_url, file);
     return { r2_key, public_url };
   },
+
+  /** Delete a file from R2 by its key */
+  deleteFile: (token: string, key: string) =>
+    request<void>('DELETE', `/api/upload/${key}`, undefined, token),
 };
 
 // ---------------------------------------------------------------------------
