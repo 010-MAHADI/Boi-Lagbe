@@ -26,7 +26,10 @@ def _build_engine_url(raw: str) -> tuple[str, dict]:
     # Pull out sslmode — asyncpg doesn't understand it
     sslmode = params.pop("sslmode", [""])[0]
 
-    # Rebuild URL without sslmode
+    # Remove channel_binding if present (older asyncpg versions don't support it)
+    params.pop("channel_binding", None)
+
+    # Rebuild URL without sslmode and channel_binding
     clean_query = urlencode({k: v[0] for k, v in params.items()})
     clean_url = urlunparse(parsed._replace(query=clean_query))
 
