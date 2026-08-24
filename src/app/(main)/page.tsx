@@ -7,7 +7,7 @@ import { Search, MapPin, ArrowRight, BookOpen, FileText, BookMarked, TrendingUp,
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useLocation } from '@/contexts/LocationContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { mockListings, mockInstitutes, mockUsers } from '@/lib/mockData';
+import { useData } from '@/contexts/DataContext';
 import ListingGrid from '@/components/listings/ListingGrid';
 import Button from '@/components/ui/Button';
 import Modal from '@/components/ui/Modal';
@@ -19,6 +19,7 @@ export default function HomePage() {
   const { isAuthenticated } = useAuth();
   const router = useRouter();
 
+  const { listings, institutes, users } = useData();
   const [searchQuery, setSearchQuery] = useState('');
   const [entryModalOpen, setEntryModalOpen] = useState(false);
   const [locationModalOpen, setLocationModalOpen] = useState(false);
@@ -34,7 +35,7 @@ export default function HomePage() {
     }
   }, [status]);
 
-  const activeListings = mockListings.filter((l) => l.status === 'active').slice(0, 8);
+  const activeListings = listings.filter((l) => l.status === 'active').slice(0, 8);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -87,21 +88,21 @@ export default function HomePage() {
             <div className="text-center">
               <div className="flex items-center justify-center gap-1.5 mb-1">
                 <TrendingUp size={18} className="text-primary-200" />
-                <span className="text-2xl md:text-3xl font-bold">{mockListings.length}+</span>
+                <span className="text-2xl md:text-3xl font-bold">{listings.length}+</span>
               </div>
               <span className="text-xs md:text-sm text-primary-200">{t('home.stats.listings')}</span>
             </div>
             <div className="text-center">
               <div className="flex items-center justify-center gap-1.5 mb-1">
                 <Users size={18} className="text-primary-200" />
-                <span className="text-2xl md:text-3xl font-bold">{mockUsers.length}+</span>
+                <span className="text-2xl md:text-3xl font-bold">{users.length}+</span>
               </div>
               <span className="text-xs md:text-sm text-primary-200">{t('home.stats.users')}</span>
             </div>
             <div className="text-center">
               <div className="flex items-center justify-center gap-1.5 mb-1">
                 <Building2 size={18} className="text-primary-200" />
-                <span className="text-2xl md:text-3xl font-bold">{mockInstitutes.length}+</span>
+                <span className="text-2xl md:text-3xl font-bold">{institutes.length}+</span>
               </div>
               <span className="text-xs md:text-sm text-primary-200">{t('home.stats.institutes')}</span>
             </div>

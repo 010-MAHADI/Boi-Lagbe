@@ -28,7 +28,6 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useLocation } from '@/contexts/LocationContext';
 import { useToast } from '@/contexts/ToastContext';
 import { formatPrice, timeAgo, calculateDistance, formatDistance } from '@/lib/utils';
-import { getInstituteById, getUserById } from '@/lib/mockData';
 import ConditionBadge from '@/components/listings/ConditionBadge';
 import PriceOfferFeed from '@/components/listings/PriceOfferFeed';
 import ReportModal from '@/components/listings/ReportModal';
@@ -50,19 +49,19 @@ export default function ListingDetailClient({ id }: ListingDetailClientProps) {
   const { lat, lng } = useLocation();
   const { showToast } = useToast();
 
-  const listing = getListing(id);
-
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [showPhone, setShowPhone] = useState(false);
   const [offerModalOpen, setOfferModalOpen] = useState(false);
   const [offerAmount, setOfferAmount] = useState('');
   const [reportModalOpen, setReportModalOpen] = useState(false);
 
+  const listing = getListing(id);
+
   if (!listing) {
     return (
       <div className="max-w-4xl mx-auto px-4 py-16 text-center page-enter">
-        <h2 className="text-2xl font-bold text-text-main mb-2">বইটি খুঁজে পাওয়া যায়নি</h2>
-        <p className="text-text-muted mb-6">বিজ্ঞাপনটি মুছে ফেলা হয়ে থাকতে পারে অথবা ভুল লিংক।</p>
+        <h2 className="text-2xl font-bold text-text-main mb-2">বইটি খুঁজে পাওয়া যায়নি</h2>
+        <p className="text-text-muted mb-6">বিজ্ঞাপনটি মুছে ফেলা হয়ে থাকতে পারে অথবা ভুল লিংক।</p>
         <Link href="/listings">
           <Button variant="primary">বই খুঁজুন</Button>
         </Link>
@@ -70,12 +69,19 @@ export default function ListingDetailClient({ id }: ListingDetailClientProps) {
     );
   }
 
-  const seller = getUserById(listing.seller_id);
-  const institute = listing.institute_id ? getInstituteById(listing.institute_id) : undefined;
+  // Seller and institute come from the API-enriched listing object
+  const seller = (listing as any)?.seller ?? null;
+  const institute = (listing as any)?.institute ?? null;
+
   const isOwner = user?.id === listing.seller_id;
   const favorited = user ? isFavorite(user.id, listing.id) : false;
   const offers = offersForListing(listing.id);
   const createdAgo = timeAgo(listing.created_at);
+
+  // Images: API returns ListingImageOut objects with a .url field; fallback to string array
+  const imageUrls: string[] = Array.isArray(listing.images)
+    ? listing.images.map((img: any) => (typeof img === 'string' ? img : img.url))
+    : [];
 
   const distanceKm =
     lat && lng && listing.lat && listing.lng
@@ -91,7 +97,7 @@ export default function ListingDetailClient({ id }: ListingDetailClientProps) {
       return;
     }
     const isFav = toggleFavorite(user.id, listing.id);
-    showToast(isFav ? 'পছন্দের তালিকায় যুক্ত করা হয়েছে' : 'পছন্দের তালিকা থেকে সরানো হয়েছে');
+    showToast(isFav ? 'পছন্দের তালিকায় যুক্ত করা হয়েছে' : 'পছন্দের তালিকা থেকে সরানো হয়েছে');
   };
 
   const handleStartChat = () => {
@@ -108,7 +114,7 @@ export default function ListingDetailClient({ id }: ListingDetailClientProps) {
     router.push(`/chat/${conv.id}`);
   };
 
-  const handleSendOffer = (e: React.FormEvent) => {
+  const handleSendOffer = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!user) {
       showToast('অফার পাঠাতে লগইন করুন', 'info');
@@ -121,10 +127,8 @@ export default function ListingDetailClient({ id }: ListingDetailClientProps) {
       return;
     }
 
-    // Submit public offer
     submitOffer(listing.id, user.id, price);
 
-    // Send chat message with offer
     const conv = findOrCreateConversation(listing, user.id);
     sendMessage(
       conv.id,
@@ -135,25 +139,27 @@ export default function ListingDetailClient({ id }: ListingDetailClientProps) {
 
     setOfferModalOpen(false);
     setOfferAmount('');
-    showToast('অফার সফলভাবে পাঠানো হয়েছে!');
+    showToast('অফার সফলভাবে পাঠানো হয়েছে!');
   };
 
   const handleMarkSold = () => {
     markListingSold(listing.id);
-    showToast('বিজ্ঞাপনটি বিক্রি হিসেবে চিহ্নিত করা হয়েছে');
+    showToast('বিজ্ঞাপনটি বিক্রি হিসেবে চিহ্নিত করা হয়েছে');
   };
 
   const handleShare = () => {
     if (navigator.share) {
-      navigator.share({
-        title: listing.title,
-        url: window.location.href,
-      }).catch(() => {});
+      navigator.share({ title: listing.title, url: window.location.href }).catch(() => {});
     } else {
       navigator.clipboard.writeText(window.location.href);
-      showToast('লিংক কপি করা হয়েছে!');
+      showToast('লিংক কপি করা হয়েছে!');
     }
   };
+
+  // contact_preference may be a string or array from the API
+  const contactPrefs: string[] = Array.isArray(listing.contact_preference)
+    ? listing.contact_preference
+    : [listing.contact_preference];
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-6 md:py-10 page-enter">
@@ -176,7 +182,7 @@ export default function ListingDetailClient({ id }: ListingDetailClientProps) {
           <button
             onClick={handleShare}
             className="p-2 rounded-full bg-white border border-border-warm text-text-muted hover:text-text-main transition-colors cursor-pointer"
-            title="শেয়ার করুন"
+            title="শেয়ার করুন"
           >
             <Share2 size={18} />
           </button>
@@ -189,9 +195,9 @@ export default function ListingDetailClient({ id }: ListingDetailClientProps) {
           {/* Main Image Viewer */}
           <div className="bg-white rounded-2xl border border-border-warm overflow-hidden shadow-[var(--shadow-card)]">
             <div className="relative aspect-4/3 w-full bg-warm-surface">
-              {listing.images && listing.images.length > 0 ? (
+              {imageUrls.length > 0 ? (
                 <Image
-                  src={listing.images[activeImageIndex]}
+                  src={imageUrls[activeImageIndex]}
                   alt={listing.title}
                   fill
                   className="object-contain"
@@ -213,16 +219,16 @@ export default function ListingDetailClient({ id }: ListingDetailClientProps) {
               )}
 
               {/* Prev / Next Controls */}
-              {listing.images && listing.images.length > 1 && (
+              {imageUrls.length > 1 && (
                 <>
                   <button
-                    onClick={() => setActiveImageIndex((prev) => (prev > 0 ? prev - 1 : listing.images.length - 1))}
+                    onClick={() => setActiveImageIndex((prev) => (prev > 0 ? prev - 1 : imageUrls.length - 1))}
                     className="absolute left-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/40 text-white hover:bg-black/60 transition-colors"
                   >
                     <ChevronLeft size={20} />
                   </button>
                   <button
-                    onClick={() => setActiveImageIndex((prev) => (prev < listing.images.length - 1 ? prev + 1 : 0))}
+                    onClick={() => setActiveImageIndex((prev) => (prev < imageUrls.length - 1 ? prev + 1 : 0))}
                     className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/40 text-white hover:bg-black/60 transition-colors"
                   >
                     <ChevronRight size={20} />
@@ -232,9 +238,9 @@ export default function ListingDetailClient({ id }: ListingDetailClientProps) {
             </div>
 
             {/* Thumbnail Navigation */}
-            {listing.images && listing.images.length > 1 && (
+            {imageUrls.length > 1 && (
               <div className="flex gap-2 p-3 overflow-x-auto border-t border-border-warm">
-                {listing.images.map((img, idx) => (
+                {imageUrls.map((img, idx) => (
                   <button
                     key={idx}
                     onClick={() => setActiveImageIndex(idx)}
@@ -260,7 +266,7 @@ export default function ListingDetailClient({ id }: ListingDetailClientProps) {
                 </span>
                 <span className="text-xs text-text-muted flex items-center gap-1 ml-auto">
                   <Eye size={12} />
-                  {listing.view_count} বার দেখা হয়েছে
+                  {listing.view_count} বার দেখা হয়েছে
                 </span>
               </div>
 
@@ -342,28 +348,25 @@ export default function ListingDetailClient({ id }: ListingDetailClientProps) {
 
             {/* Public Price Offer Feed ("Last Price") */}
             <hr className="border-border-warm" />
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <PriceOfferFeed offers={offers} />
-                {listing.status === 'active' && !isOwner && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setOfferModalOpen(true)}
-                    className="shrink-0"
-                  >
-                    <TrendingDown size={14} className="text-accent" />
-                    অফার দাম দিন
-                  </Button>
-                )}
-              </div>
+            <div className="flex items-center justify-between">
+              <PriceOfferFeed offers={offers} />
+              {listing.status === 'active' && !isOwner && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setOfferModalOpen(true)}
+                  className="shrink-0"
+                >
+                  <TrendingDown size={14} className="text-accent" />
+                  অফার দাম দিন
+                </Button>
+              )}
             </div>
           </div>
         </div>
 
         {/* Right Column: Seller Profile & Contact CTAs */}
         <div className="lg:col-span-5 space-y-6">
-          {/* Seller Card */}
           <div className="bg-white rounded-2xl border border-border-warm p-6 space-y-5 shadow-[var(--shadow-card)]">
             <h3 className="text-base font-bold text-text-main border-b border-border-warm pb-3">
               বিক্রেতার তথ্য
@@ -387,10 +390,8 @@ export default function ListingDetailClient({ id }: ListingDetailClientProps) {
               </div>
             )}
 
-            {/* Action Buttons */}
             {listing.status === 'active' ? (
               <div className="space-y-3 pt-2">
-                {/* Chat CTA */}
                 <Button
                   variant="primary"
                   fullWidth
@@ -402,7 +403,6 @@ export default function ListingDetailClient({ id }: ListingDetailClientProps) {
                   ইন-অ্যাপ চ্যাট করুন
                 </Button>
 
-                {/* WhatsApp Direct CTA */}
                 {listing.whatsapp_number && (
                   <a
                     href={`https://wa.me/${listing.whatsapp_number.replace(/[^0-9]/g, '')}`}
@@ -417,8 +417,7 @@ export default function ListingDetailClient({ id }: ListingDetailClientProps) {
                   </a>
                 )}
 
-                {/* Phone Reveal */}
-                {listing.contact_preference === 'phone' && seller?.phone && (
+                {contactPrefs.includes('phone') && seller?.phone && (
                   <div>
                     {showPhone ? (
                       <div className="p-3 bg-primary-50 border border-primary-200 rounded-xl text-center">
@@ -436,7 +435,6 @@ export default function ListingDetailClient({ id }: ListingDetailClientProps) {
                   </div>
                 )}
 
-                {/* Owner Actions */}
                 {isOwner && (
                   <div className="pt-2 border-t border-border-warm">
                     <Button variant="accent" fullWidth onClick={handleMarkSold}>
@@ -452,13 +450,11 @@ export default function ListingDetailClient({ id }: ListingDetailClientProps) {
               </div>
             )}
 
-            {/* Safety Reminder */}
             <div className="p-3 rounded-xl bg-warm-surface border border-border-warm text-xs text-text-muted space-y-1">
               <span className="font-semibold text-text-main block">নিরাপত্তা টিপস:</span>
-              <p>ক্যাম্পাসের জনবহুল ও আলোকিত স্থানে দেখা করুন। অগ্রিম টাকা না দিয়ে সরাসরি বইটি দেখে কেনাবেচা করুন।</p>
+              <p>ক্যাম্পাসের জনবহুল ও আলোকিত স্থানে দেখা করুন। অগ্রিম টাকা না দিয়ে সরাসরি বইটি দেখে কেনাবেচা করুন।</p>
             </div>
 
-            {/* Report Button */}
             {!isOwner && user && (
               <div className="text-center pt-2">
                 <button
@@ -483,7 +479,7 @@ export default function ListingDetailClient({ id }: ListingDetailClientProps) {
       >
         <form onSubmit={handleSendOffer} className="space-y-4">
           <p className="text-sm text-text-muted">
-            বিক্রেতার চাওয়া দাম: <span className="font-bold text-text-main">{formatPrice(listing.price)}</span>
+            বিক্রেতার চাওয়া দাম: <span className="font-bold text-text-main">{formatPrice(listing.price)}</span>
           </p>
           <Input
             label="আপনার প্রস্তাবিত দাম (৳)"
@@ -495,7 +491,7 @@ export default function ListingDetailClient({ id }: ListingDetailClientProps) {
             autoFocus
           />
           <div className="text-xs text-text-muted bg-accent-50 p-2.5 rounded-lg border border-accent-100">
-            * আপনার দেওয়া এই দামটি বিজ্ঞাপনের পাতায় প্রকাশ্য অফার ফিডে দেখাবে।
+            * আপনার দেওয়া এই দামটি বিজ্ঞাপনের পাতায় প্রকাশ্য অফার ফিডে দেখাবে।
           </div>
           <div className="flex gap-2 justify-end pt-2">
             <Button variant="outline" type="button" onClick={() => setOfferModalOpen(false)}>

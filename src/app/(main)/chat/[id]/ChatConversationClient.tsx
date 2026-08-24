@@ -9,7 +9,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useToast } from '@/contexts/ToastContext';
 import { formatPrice, timeAgo } from '@/lib/utils';
-import { getUserById } from '@/lib/mockData';
 import ReviewModal from '@/components/listings/ReviewModal';
 import Button from '@/components/ui/Button';
 import Modal from '@/components/ui/Modal';
@@ -23,7 +22,7 @@ interface ChatConversationClientProps {
 export default function ChatConversationClient({ conversationId }: ChatConversationClientProps) {
   const router = useRouter();
   const { user } = useAuth();
-  const { conversations, messagesFor, sendMessage, markConversationRead, getListing, submitOffer, markListingSold } = useData();
+  const { conversations, messagesFor, sendMessage, markConversationRead, getListing, submitOffer, markListingSold, refreshMessages } = useData();
   const { language } = useLanguage();
   const { showToast } = useToast();
 
@@ -36,16 +35,15 @@ export default function ChatConversationClient({ conversationId }: ChatConversat
 
   const conversation = conversations.find((c) => c.id === conversationId);
 
-  // Auto read & 3-second polling simulation
+  // Real polling — fetch new messages every 4 seconds while window is open
   useEffect(() => {
-    if (conversationId && user) {
-      markConversationRead(conversationId, user.id);
-      const interval = setInterval(() => {
-        markConversationRead(conversationId, user.id);
-      }, 3000);
-      return () => clearInterval(interval);
-    }
-  }, [conversationId, user, markConversationRead]);
+    if (!conversationId || !user) return;
+    markConversationRead(conversationId, user.id);
+    const interval = setInterval(() => {
+      refreshMessages(conversationId);
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [conversationId, user, markConversationRead, refreshMessages]);
 
   // Scroll to bottom on new message
   const messages = messagesFor(conversationId);
@@ -74,8 +72,9 @@ export default function ChatConversationClient({ conversationId }: ChatConversat
   }
 
   const listing = getListing(conversation.listing_id);
+  // other_user from API-enriched conversation
+  const otherUser = (conversation as any).other_user ?? null;
   const otherUserId = conversation.buyer_id === user.id ? conversation.seller_id : conversation.buyer_id;
-  const otherUser = getUserById(otherUserId);
   const isBuyer = user.id === conversation.buyer_id;
 
   const handleSend = (e: React.FormEvent) => {

@@ -54,6 +54,7 @@ export default function CreateListingClient() {
   const [negotiable, setNegotiable] = useState(true);
   const [quantity, setQuantity] = useState('1');
   const [images, setImages] = useState<string[]>([]);
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
 
   // Multi-select Contact Preferences
   const [contactPreferences, setContactPreferences] = useState<ContactPreference[]>(['chat']);
@@ -152,7 +153,7 @@ export default function CreateListingClient() {
     setStep((prev) => Math.max(1, prev - 1));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!user) {
       showToast('বিজ্ঞাপন দিতে আগে লগইন করুন', 'error');
@@ -162,37 +163,38 @@ export default function CreateListingClient() {
 
     if (!validateStep(4)) return;
 
-    // Save phone to user if missing
-    if (userPhoneInput.trim() && !user.phone) {
-      user.phone = userPhoneInput.trim();
-    }
-
     const numPrice = parseInt(price, 10) || 0;
     const numQty = parseInt(quantity, 10) || 1;
 
-    const newListing = createListing({
-      seller_id: user.id,
-      category_id: currentCategory?.id || 'cat-1',
-      category_slug: categorySlug,
-      institute_id: isAcademic ? selectedInstitute?.id : undefined,
-      title: title.trim(),
-      author: author.trim() || undefined,
-      description_bn: descriptionBn.trim() || undefined,
-      description_en: descriptionEn.trim() || undefined,
-      condition,
-      level_label: isAcademic ? levelLabel : undefined,
-      price: numPrice,
-      negotiable,
-      quantity: numQty,
-      contact_preference: contactPreferences,
-      whatsapp_number: contactPreferences.includes('whatsapp') ? whatsappNumber.trim() : undefined,
-      images,
-      lat: lat || selectedInstitute?.lat || 23.8103,
-      lng: lng || selectedInstitute?.lng || 90.4125,
-    });
+    try {
+      const newListing = await createListing({
+        seller_id: user.id,
+        category_id: currentCategory?.id || 'cat-1',
+        category_slug: categorySlug,
+        institute_id: isAcademic ? selectedInstitute?.id : undefined,
+        title: title.trim(),
+        author: author.trim() || undefined,
+        description_bn: descriptionBn.trim() || undefined,
+        description_en: descriptionEn.trim() || undefined,
+        condition,
+        level_label: isAcademic ? levelLabel : undefined,
+        price: numPrice,
+        negotiable,
+        quantity: numQty,
+        contact_preference: contactPreferences,
+        whatsapp_number: contactPreferences.includes('whatsapp') ? whatsappNumber.trim() : undefined,
+        images,
+        imageFiles,
+        lat: lat || selectedInstitute?.lat || 23.8103,
+        lng: lng || selectedInstitute?.lng || 90.4125,
+      });
 
-    showToast('আপনার বিজ্ঞাপনটি সফলভাবে প্রকাশ করা হয়েছে!');
-    router.push(`/listings/${newListing.id}`);
+      showToast('আপনার বিজ্ঞাপনটি সফলভাবে প্রকাশ করা হয়েছে!');
+      router.push(`/listings/${newListing.id}`);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'বিজ্ঞাপন প্রকাশে ত্রুটি হয়েছে';
+      showToast(msg, 'error');
+    }
   };
 
   if (!user) return null;
@@ -473,7 +475,14 @@ export default function CreateListingClient() {
               </label>
             </div>
 
-            <ImageUploader images={images} onChange={setImages} max={6} />
+            <ImageUploader
+              images={images}
+              onChange={(urls, files) => {
+                setImages(urls);
+                if (files) setImageFiles(files);
+              }}
+              max={6}
+            />
 
             <div className="pt-4 flex justify-between">
               <Button type="button" variant="outline" onClick={handlePrev}>

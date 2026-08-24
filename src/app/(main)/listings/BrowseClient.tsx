@@ -1,76 +1,89 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { useData } from '@/contexts/DataContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useLocation } from '@/contexts/LocationContext';
-import { searchListings } from '@/lib/search';
-import { SearchFilters } from '@/types';
+import { listingsApi } from '@/lib/api';
+import { Listing, SearchFilters } from '@/types';
 import SearchBar from '@/components/listings/SearchBar';
 import FilterBar from '@/components/listings/FilterBar';
 import ListingGrid from '@/components/listings/ListingGrid';
 import RadarScanner from '@/components/ui/RadarScanner';
 import LocationModal from '@/components/ui/LocationModal';
-import { SlidersHorizontal, MapPin } from 'lucide-react';
+import Button from '@/components/ui/Button';
+import { SlidersHorizontal, MapPin, ChevronLeft, ChevronRight } from 'lucide-react';
 
 export default function BrowseClient() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { listings } = useData();
   const { t } = useLanguage();
   const { lat, lng, status: locStatus, district: locDistrict, requestLocation } = useLocation();
 
-  // Read URL params
-  const initialQuery = searchParams.get('q') || '';
-  const initialCategory = (searchParams.get('category') as SearchFilters['category']) || undefined;
-  const initialInstituteType = (searchParams.get('type') as SearchFilters['institute_type']) || undefined;
-  const initialDistrict = searchParams.get('district') || undefined;
-  const initialLevel = searchParams.get('level') || undefined;
-  const initialCondition = (searchParams.get('condition') as SearchFilters['condition']) || undefined;
-  const initialSort = (searchParams.get('sort') as SearchFilters['sort_by']) || undefined;
+  const [listings, setListings] = useState<Listing[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(false);
+  const [locationModalOpen, setLocationModalOpen] = useState(false);
 
   const [filters, setFilters] = useState<SearchFilters>({
-    query: initialQuery || undefined,
-    category: initialCategory,
-    institute_type: initialInstituteType,
-    district: initialDistrict,
-    level_label: initialLevel,
-    condition: initialCondition,
-    sort_by: initialSort,
+    query: searchParams.get('q') || undefined,
+    category: (searchParams.get('category') as SearchFilters['category']) || undefined,
+    institute_type: (searchParams.get('type') as SearchFilters['institute_type']) || undefined,
+    district: searchParams.get('district') || undefined,
+    level_label: searchParams.get('level') || undefined,
+    condition: (searchParams.get('condition') as SearchFilters['condition']) || undefined,
+    sort_by: (searchParams.get('sort') as SearchFilters['sort_by']) || 'newest',
     lat,
     lng,
   });
 
-  const [locationModalOpen, setLocationModalOpen] = useState(false);
-  const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
+  const PAGE_SIZE = 20;
 
-  const searchResults = useMemo(() => {
-    return searchListings(listings, { ...filters, lat, lng });
-  }, [listings, filters, lat, lng]);
+  const fetchListings = useCallback(async (currentFilters: SearchFilters, currentPage: number) => {
+    setLoading(true);
+    try {
+      const result = await listingsApi.search({
+        ...currentFilters,
+        lat: currentFilters.lat ?? lat ?? undefined,
+        lng: currentFilters.lng ?? lng ?? undefined,
+        page: currentPage,
+        page_size: PAGE_SIZE,
+      });
+      // API returns ListingOut with images as objects; cast safely
+      setListings(result.items as unknown as Listing[]);
+      setTotal(result.total);
+    } catch (e) {
+      console.warn('Search failed', e);
+    } finally {
+      setLoading(false);
+    }
+  }, [lat, lng]);
 
-  const filteredListings = useMemo(() => {
-    return searchResults.map((r) => r.listing);
-  }, [searchResults]);
+  // Fetch on filter or page change
+  useEffect(() => {
+    fetchListings(filters, page);
+  }, [filters, page, fetchListings]);
+
+  // Sync lat/lng into filters once location resolves
+  useEffect(() => {
+    if (lat && lng) {
+      setFilters((prev) => ({ ...prev, lat, lng }));
+    }
+  }, [lat, lng]);
 
   const handleFilterChange = (patch: Partial<SearchFilters>) => {
+    setPage(1);
     setFilters((prev) => ({ ...prev, ...patch }));
   };
 
   const handleClearFilters = () => {
-    setFilters({
-      query: undefined,
-      category: undefined,
-      institute_type: undefined,
-      district: undefined,
-      level_label: undefined,
-      condition: undefined,
-      sort_by: undefined,
-      lat,
-      lng,
-    });
+    setPage(1);
+    setFilters({ sort_by: 'newest', lat, lng });
     router.push('/listings');
   };
+
+  const totalPages = Math.ceil(total / PAGE_SIZE);
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-6 md:py-8 page-enter">
@@ -81,11 +94,10 @@ export default function BrowseClient() {
             {t('listings.title')}
           </h1>
           <p className="text-sm text-text-muted mt-1">
-            {t('listings.subtitle')}
+            {total > 0 ? `${total} টি বই পাওয়া গেছে` : t('listings.subtitle')}
           </p>
         </div>
 
-        {/* Location chip */}
         <div className="flex items-center gap-2">
           {locDistrict ? (
             <button
@@ -104,14 +116,6 @@ export default function BrowseClient() {
               <span>{t('home.location.allow')}</span>
             </button>
           )}
-
-          <button
-            onClick={() => setMobileFilterOpen(!mobileFilterOpen)}
-            className="md:hidden flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-border-warm text-text-main text-xs font-medium shadow-xs cursor-pointer"
-          >
-            <SlidersHorizontal size={14} />
-            <span>{t('common.filter')}</span>
-          </button>
         </div>
       </div>
 
@@ -123,27 +127,56 @@ export default function BrowseClient() {
         />
       </div>
 
-      {/* Main Filter Bar & Results Grid */}
       <div className="space-y-6">
         <FilterBar
           filters={filters}
           onChange={handleFilterChange}
           onClear={handleClearFilters}
-          resultCount={filteredListings.length}
+          resultCount={total}
         />
 
         {locStatus === 'requesting' ? (
           <RadarScanner />
+        ) : loading ? (
+          <div className="flex justify-center py-16">
+            <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+          </div>
         ) : (
-          <ListingGrid
-            listings={filteredListings}
-            emptyMessage={t('listings.noResults')}
-            emptyHint={t('listings.noResultsDesc')}
-          />
+          <>
+            <ListingGrid
+              listings={listings}
+              emptyMessage={t('listings.noResults')}
+              emptyHint={t('listings.noResultsDesc')}
+            />
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-center gap-3 pt-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                >
+                  <ChevronLeft size={16} /> আগের পাতা
+                </Button>
+                <span className="text-sm text-text-muted">
+                  {page} / {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page === totalPages}
+                >
+                  পরের পাতা <ChevronRight size={16} />
+                </Button>
+              </div>
+            )}
+          </>
         )}
       </div>
 
-      {/* Manual Location Selection Modal */}
       <LocationModal
         isOpen={locationModalOpen}
         onClose={() => setLocationModalOpen(false)}

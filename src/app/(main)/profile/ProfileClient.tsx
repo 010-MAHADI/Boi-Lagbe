@@ -6,7 +6,6 @@ import { User as UserIcon, Phone, Building2, CheckCircle, Edit3, LogOut } from '
 import { useData } from '@/contexts/DataContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
-import { getUserById, getInstituteById } from '@/lib/mockData';
 import ListingGrid from '@/components/listings/ListingGrid';
 import ReviewList from '@/components/listings/ReviewList';
 import StarRating from '@/components/ui/StarRating';

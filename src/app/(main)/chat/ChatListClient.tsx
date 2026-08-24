@@ -8,7 +8,6 @@ import { useData } from '@/contexts/DataContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { timeAgo } from '@/lib/utils';
-import { getUserById } from '@/lib/mockData';
 import Avatar from '@/components/ui/Avatar';
 import Badge from '@/components/ui/Badge';
 
@@ -60,9 +59,11 @@ export default function ChatListClient() {
       ) : (
         <div className="bg-white rounded-2xl border border-border-warm divide-y divide-border-warm shadow-[var(--shadow-card)] overflow-hidden">
           {conversations.map((conv) => {
-            const otherUserId = conv.buyer_id === user.id ? conv.seller_id : conv.buyer_id;
-            const otherUser = getUserById(otherUserId);
+            // other_user comes from the API-enriched conversation object
+            const otherUser = (conv as any).other_user ?? null;
+            const otherName = otherUser?.name ?? (conv.buyer_id === user.id ? 'বিক্রেতা' : 'ক্রেতা');
             const time = conv.last_message_at ? timeAgo(conv.last_message_at) : undefined;
+            const listingImageUrl = (conv as any).listing_image_url ?? conv.listing_image;
 
             return (
               <Link
@@ -72,8 +73,8 @@ export default function ChatListClient() {
               >
                 {/* Listing Thumbnail */}
                 <div className="relative w-12 h-12 rounded-xl overflow-hidden bg-warm-surface border border-border-warm shrink-0">
-                  {conv.listing_image ? (
-                    <Image src={conv.listing_image} alt={conv.listing_title} fill className="object-cover" />
+                  {listingImageUrl ? (
+                    <Image src={listingImageUrl} alt={conv.listing_title ?? ''} fill className="object-cover" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-text-muted">
                       <BookOpen size={20} />
@@ -85,7 +86,7 @@ export default function ChatListClient() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2 mb-1">
                     <span className="font-bold text-sm text-text-main truncate">
-                      {otherUser?.name || 'ব্যবহারকারী'}
+                      {otherName}
                     </span>
                     {time && (
                       <span className="text-xs text-text-muted shrink-0">
