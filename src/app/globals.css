@@ -1,26 +1,192 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
+/* ===== Boi Lagbe Custom Theme ===== */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* Primary - Trustworthy Teal */
+  --color-primary: #0D9488;
+  --color-primary-dark: #0F766E;
+  --color-primary-light: #5EEAD4;
+  --color-primary-50: #F0FDFA;
+  --color-primary-100: #CCFBF1;
+  --color-primary-200: #99F6E4;
+  --color-primary-600: #0D9488;
+  --color-primary-700: #0F766E;
+  --color-primary-800: #115E59;
+  --color-primary-900: #134E4A;
+
+  /* Accent - Warm Coral/Orange */
+  --color-accent: #F97316;
+  --color-accent-light: #FB923C;
+  --color-accent-dark: #EA580C;
+  --color-accent-50: #FFF7ED;
+  --color-accent-100: #FFEDD5;
+  --color-accent-200: #FED7AA;
+
+  /* Warm Backgrounds */
+  --color-warm-white: #FAFAF5;
+  --color-warm-surface: #F5F5F0;
+  --color-warm-hover: #EEEDE8;
+
+  /* Text */
+  --color-text-main: #1C1917;
+  --color-text-secondary: #78716C;
+  --color-text-muted: #A8A29E;
+  --color-text-inverse: #FAFAF9;
+
+  /* Borders */
+  --color-border-warm: #E7E5E4;
+  --color-border-strong: #D6D3D1;
+
+  /* Status Colors */
+  --color-success: #16A34A;
+  --color-success-light: #DCFCE7;
+  --color-error: #DC2626;
+  --color-error-light: #FEE2E2;
+  --color-warning: #F59E0B;
+  --color-warning-light: #FEF3C7;
+  --color-info: #0EA5E9;
+  --color-info-light: #E0F2FE;
+
+  /* Fonts */
+  --font-bangla: var(--font-noto-sans-bengali), 'Noto Sans Bengali', sans-serif;
+  --font-inter: var(--font-inter), 'Inter', sans-serif;
+
+  /* Shadows */
+  --shadow-card: 0 1px 3px rgba(28, 25, 23, 0.06), 0 1px 2px rgba(28, 25, 23, 0.04);
+  --shadow-card-hover: 0 4px 12px rgba(28, 25, 23, 0.08), 0 2px 4px rgba(28, 25, 23, 0.04);
+  --shadow-modal: 0 20px 60px rgba(28, 25, 23, 0.15), 0 8px 20px rgba(28, 25, 23, 0.08);
+  --shadow-nav: 0 1px 3px rgba(28, 25, 23, 0.05);
+
+  /* Border Radius */
+  --radius-card: 12px;
+  --radius-button: 10px;
+  --radius-input: 8px;
+  --radius-badge: 6px;
+  --radius-full: 9999px;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* ===== Base Styles ===== */
+* {
+  box-sizing: border-box;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--color-warm-white);
+  color: var(--color-text-main);
+  font-family: var(--font-inter);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Bangla text class */
+.font-bangla {
+  font-family: var(--font-bangla);
+}
+
+/* ===== Scrollbar Styling ===== */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-warm-surface);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border-strong);
+  border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-muted);
+}
+
+/* ===== Utility Classes ===== */
+.gradient-primary {
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
+}
+
+.gradient-accent {
+  background: linear-gradient(135deg, var(--color-accent) 0%, var(--color-accent-dark) 100%);
+}
+
+.gradient-hero {
+  background: linear-gradient(135deg, var(--color-primary-900) 0%, var(--color-primary-700) 50%, var(--color-primary) 100%);
+}
+
+/* Card hover effect */
+.card-hover {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-card-hover);
+}
+
+/* Smooth page transitions */
+.page-enter {
+  animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ===== Badge Condition Colors ===== */
+.badge-new {
+  background-color: var(--color-success-light);
+  color: var(--color-success);
+}
+
+.badge-like-new {
+  background-color: var(--color-info-light);
+  color: var(--color-info);
+}
+
+.badge-good {
+  background-color: var(--color-warning-light);
+  color: var(--color-warning);
+}
+
+.badge-fair {
+  background-color: var(--color-accent-50);
+  color: var(--color-accent-dark);
+}
+
+/* ===== Price Tag ===== */
+.price-tag {
+  font-weight: 700;
+  color: var(--color-accent-dark);
+}
+
+/* ===== Input Focus Ring ===== */
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.15);
+}
+
+/* ===== Bottom Nav Safe Area ===== */
+.pb-safe {
+  padding-bottom: max(env(safe-area-inset-bottom), 16px);
+}
+
+/* Hide default scrollbar on mobile for horizontal scroll */
+.scroll-hidden::-webkit-scrollbar {
+  display: none;
+}
+
+.scroll-hidden {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
