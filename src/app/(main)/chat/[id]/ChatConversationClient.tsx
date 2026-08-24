@@ -14,6 +14,7 @@ import Button from '@/components/ui/Button';
 import Modal from '@/components/ui/Modal';
 import Input from '@/components/ui/Input';
 import Avatar from '@/components/ui/Avatar';
+import MessageList from './MessageList';
 
 interface ChatConversationClientProps {
   conversationId: string;
@@ -175,47 +176,11 @@ export default function ChatConversationClient({ conversationId }: ChatConversat
       )}
 
       {/* Messages Stream */}
-      <div className="flex-1 bg-warm-surface border-x border-border-warm p-4 overflow-y-auto space-y-3">
-        {messages.length === 0 ? (
-          <div className="text-center py-12 text-text-muted text-sm">
-            কথোপকথন শুরু করতে নিচে মেসেজ লিখুন।
-          </div>
-        ) : (
-          messages.map((msg) => {
-            const isMe = msg.sender_id === user.id;
-            const time = timeAgo(msg.created_at);
-
-            return (
-              <div
-                key={msg.id}
-                className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}
-              >
-                <div
-                  className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
-                    msg.is_offer
-                      ? 'bg-accent-50 border-2 border-accent-100 text-text-main shadow-xs'
-                      : isMe
-                      ? 'bg-primary text-white rounded-br-none'
-                      : 'bg-white border border-border-warm text-text-main rounded-bl-none shadow-xs'
-                  }`}
-                >
-                  {msg.is_offer && (
-                    <div className="flex items-center gap-1 text-xs font-bold text-accent-dark mb-1">
-                      <TrendingDown size={14} />
-                      মূল্য অফার: {formatPrice(msg.offer_amount || 0)}
-                    </div>
-                  )}
-                  <span>{msg.content}</span>
-                </div>
-                <span className="text-[10px] text-text-muted mt-1 px-1">
-                  {language === 'bn' ? time.bn : time.en}
-                </span>
-              </div>
-            );
-          })
-        )}
-        <div ref={messagesEndRef} />
-      </div>
+      <MessageList
+        messages={messages}
+        currentUserId={user.id}
+        language={language}
+      />
 
       {/* Bottom Message Input Bar */}
       <form
