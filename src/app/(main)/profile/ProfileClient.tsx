@@ -20,17 +20,22 @@ interface ProfileClientProps {
 
 export default function ProfileClient({ userId }: ProfileClientProps) {
   const router = useRouter();
-  const { user: currentUser, logout } = useAuth();
-  const { listings, reviewsForUser } = useData();
+  const { user: currentUser, logout, updateProfile } = useAuth();
+  const { listings, reviewsForUser, getInstitute, users } = useData();
   const { showToast } = useToast();
 
   const targetUserId = userId || currentUser?.id;
-  const targetUser = targetUserId ? getUserById(targetUserId) || (targetUserId === currentUser?.id ? currentUser : undefined) : undefined;
+
+  // Find user: from the DataContext users list (for other profiles) or currentUser (own profile)
+  const targetUser = targetUserId
+    ? (users.find((u) => u.id === targetUserId) ?? (targetUserId === currentUser?.id ? currentUser : undefined))
+    : undefined;
 
   const [activeTab, setActiveTab] = useState<'active' | 'sold' | 'reviews'>('active');
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editName, setEditName] = useState(targetUser?.name || '');
   const [editPhone, setEditPhone] = useState(targetUser?.phone || '');
+  const [saving, setSaving] = useState(false);
 
   if (!targetUser) {
     return (
@@ -43,7 +48,8 @@ export default function ProfileClient({ userId }: ProfileClientProps) {
   }
 
   const isSelf = currentUser?.id === targetUser.id;
-  const institute = targetUser.institute_id ? getInstituteById(targetUser.institute_id) : undefined;
+  // Institute comes from DataContext (already loaded from API)
+  const institute = targetUser.institute_id ? getInstitute(targetUser.institute_id) : undefined;
   const userListings = listings.filter((l) => l.seller_id === targetUser.id);
   const activeListings = userListings.filter((l) => l.status === 'active');
   const soldListings = userListings.filter((l) => l.status === 'sold');
@@ -53,6 +59,16 @@ export default function ProfileClient({ userId }: ProfileClientProps) {
     logout();
     showToast('লগআউট করা হয়েছে');
     router.push('/');
+  };
+
+  const handleSaveProfile = () => {
+    if (!editName.trim()) {
+      showToast('নাম খালি রাখা যাবে না', 'error');
+      return;
+    }
+    updateProfile({ name: editName.trim(), phone: editPhone.trim() || undefined });
+    showToast('প্রোফাইল তথ্য আপডেট করা হয়েছে');
+    setEditModalOpen(false);
   };
 
   return (
@@ -96,7 +112,15 @@ export default function ProfileClient({ userId }: ProfileClientProps) {
 
           {isSelf && (
             <div className="flex sm:flex-col gap-2 shrink-0">
-              <Button size="sm" variant="outline" onClick={() => setEditModalOpen(true)}>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setEditName(targetUser.name);
+                  setEditPhone(targetUser.phone || '');
+                  setEditModalOpen(true);
+                }}
+              >
                 <Edit3 size={14} /> প্রোফাইল এডিট
               </Button>
               <Button size="sm" variant="outline" onClick={handleLogout}>
@@ -109,38 +133,23 @@ export default function ProfileClient({ userId }: ProfileClientProps) {
 
       {/* Navigation Tabs */}
       <div className="flex border-b border-border-warm mb-6">
-        <button
-          onClick={() => setActiveTab('active')}
-          className={`px-5 py-3 font-semibold text-sm border-b-2 transition-colors cursor-pointer ${
-            activeTab === 'active'
-              ? 'border-primary text-primary'
-              : 'border-transparent text-text-muted hover:text-text-main'
-          }`}
-        >
-          চালু বিজ্ঞাপন ({activeListings.length})
-        </button>
-
-        <button
-          onClick={() => setActiveTab('sold')}
-          className={`px-5 py-3 font-semibold text-sm border-b-2 transition-colors cursor-pointer ${
-            activeTab === 'sold'
-              ? 'border-primary text-primary'
-              : 'border-transparent text-text-muted hover:text-text-main'
-          }`}
-        >
-          বিক্রি হয়ে যাওয়া ({soldListings.length})
-        </button>
-
-        <button
-          onClick={() => setActiveTab('reviews')}
-          className={`px-5 py-3 font-semibold text-sm border-b-2 transition-colors cursor-pointer ${
-            activeTab === 'reviews'
-              ? 'border-primary text-primary'
-              : 'border-transparent text-text-muted hover:text-text-main'
-          }`}
-        >
-          রিভিউ ({reviews.length})
-        </button>
+        {[
+          { key: 'active', label: `চালু বিজ্ঞাপন (${activeListings.length})` },
+          { key: 'sold', label: `বিক্রি হয়ে যাওয়া (${soldListings.length})` },
+          { key: 'reviews', label: `রিভিউ (${reviews.length})` },
+        ].map(({ key, label }) => (
+          <button
+            key={key}
+            onClick={() => setActiveTab(key as 'active' | 'sold' | 'reviews')}
+            className={`px-5 py-3 font-semibold text-sm border-b-2 transition-colors cursor-pointer ${
+              activeTab === key
+                ? 'border-primary text-primary'
+                : 'border-transparent text-text-muted hover:text-text-main'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
       {/* Tab Content */}
@@ -151,18 +160,14 @@ export default function ProfileClient({ userId }: ProfileClientProps) {
           emptyHint="নতুন কোনো বই বিক্রি করতে চাইলে 'বই বিক্রি করুন' এ ক্লিক করুন।"
         />
       )}
-
       {activeTab === 'sold' && (
         <ListingGrid
           listings={soldListings}
-          emptyMessage="বিক্রি হওয়া কোনো বই নেই"
-          emptyHint="আপনার বিক্রি সম্পন্ন হওয়া সব বই এখানে জমা হবে।"
+          emptyMessage="বিক্রি হওয়া কোনো বই নেই"
+          emptyHint="আপনার বিক্রি সম্পন্ন হওয়া সব বই এখানে জমা হবে।"
         />
       )}
-
-      {activeTab === 'reviews' && (
-        <ReviewList reviews={reviews} />
-      )}
+      {activeTab === 'reviews' && <ReviewList reviews={reviews} />}
 
       {/* Edit Profile Modal */}
       <Modal
@@ -188,13 +193,7 @@ export default function ProfileClient({ userId }: ProfileClientProps) {
             <Button variant="outline" onClick={() => setEditModalOpen(false)}>
               বাতিল
             </Button>
-            <Button
-              variant="primary"
-              onClick={() => {
-                showToast('প্রোফাইল তথ্য আপডেট করা হয়েছে');
-                setEditModalOpen(false);
-              }}
-            >
+            <Button variant="primary" onClick={handleSaveProfile} isLoading={saving}>
               সংরক্ষণ করুন
             </Button>
           </div>

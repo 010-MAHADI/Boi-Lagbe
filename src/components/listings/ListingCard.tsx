@@ -10,7 +10,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
 import { useToast } from '@/contexts/ToastContext';
 import { formatPrice, timeAgo, calculateDistance, formatDistance, truncateText } from '@/lib/utils';
-import { getInstituteById } from '@/lib/mockData';
 import ConditionBadge from './ConditionBadge';
 import ListingImage from './ListingImage';
 
@@ -22,7 +21,7 @@ export default function ListingCard({ listing }: ListingCardProps) {
   const { language, t } = useLanguage();
   const { lat, lng } = useLocation();
   const { user } = useAuth();
-  const { isFavorite, toggleFavorite } = useData();
+  const { isFavorite, toggleFavorite, getInstitute } = useData();
   const { showToast } = useToast();
   const router = useRouter();
 
@@ -32,7 +31,6 @@ export default function ListingCard({ listing }: ListingCardProps) {
     e.preventDefault();
     e.stopPropagation();
     if (!user) {
-      // Wishlists belong to an account — send them to log in, then come back.
       router.push(`/login?next=/listings/${listing.id}`);
       return;
     }
@@ -40,7 +38,8 @@ export default function ListingCard({ listing }: ListingCardProps) {
     showToast(t(nowFavorite ? 'favorites.added' : 'favorites.removed'));
   };
 
-  const institute = listing.institute_id ? getInstituteById(listing.institute_id) : null;
+  // Institute: prefer the API-enriched object on the listing, fall back to DataContext lookup
+  const institute = (listing as any)?.institute ?? (listing.institute_id ? getInstitute(listing.institute_id) : null);
   const distance = calculateDistance(lat, lng, listing.lat, listing.lng);
   const distanceText = formatDistance(distance);
   const timeText = timeAgo(listing.created_at);
@@ -51,7 +50,7 @@ export default function ListingCard({ listing }: ListingCardProps) {
       <div className="bg-white rounded-[var(--radius-card)] border border-border-warm shadow-[var(--shadow-card)] overflow-hidden card-hover">
         {/* Image */}
         <div className="relative aspect-[4/3] bg-warm-surface overflow-hidden">
-          <ListingImage src={listing.images[0]} alt={listing.title} />
+          <ListingImage src={typeof listing.images?.[0] === 'string' ? listing.images[0] : (listing.images?.[0] as any)?.url} alt={listing.title} />
           {/* Favorite button */}
           <button
             onClick={handleFavorite}
